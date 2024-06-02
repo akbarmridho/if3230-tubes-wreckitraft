@@ -15,8 +15,8 @@ type RaftNode struct {
 	Address shared.Address
 	LocalID string
 
-	clusters         []shared.Address
-	clusterLeader    *shared.Address
+	clusters         []NodeConfiguration
+	clusterLeader    *NodeConfiguration
 	logs             LogStore
 	stable           StableStore
 	heartbeatTimeout time.Duration
@@ -135,14 +135,14 @@ func (r *RaftNode) startElection() <-chan *RequestVoteResponse {
 	}
 
 	for _, peer := range r.clusters {
-		if peer.IP == r.Address.IP && peer.Port == r.Address.Port {
+		if peer.Address.IP == r.Address.IP && peer.Address.Port == r.Address.Port {
 			votesChannel <- &RequestVoteResponse{
 				term:    req.term,
 				granted: true,
 				voterID: r.LocalID,
 			}
 		} else {
-			requestVoteFromPeer(peer)
+			requestVoteFromPeer(peer.Address)
 		}
 	}
 
@@ -161,7 +161,7 @@ func (r *RaftNode) runLeader() {
 				go r.sendHeartbeat()
 			default:
 				if r.getState() != LEADER {
-					logger.Log.Info("%s:%d is no longer the leader", r.address.IP, r.address.Port)
+					logger.Log.Info("%s:%d is no longer the leader", r.Address.IP, r.Address.Port)
 					return
 				}
 			}
@@ -173,12 +173,12 @@ func (r *RaftNode) sendHeartbeat() {
 	logger.Log.Info("Leader is sending heartbeats...")
 
 	for _, addr := range r.clusters {
-		if addr.Equals(r.address) {
+		if addr.Address.Equals(r.Address) {
 			continue
 		}
 
 		// Send heartbeat
-		logger.Log.Info("Leader is sending heartbeat to %s:%d", addr.IP, addr.Port)
+		logger.Log.Info("Leader is sending heartbeat to %s:%d", addr.Address.IP, addr.Address.Port)
 		// go r.appendEntries(addr)
 	}
 }
