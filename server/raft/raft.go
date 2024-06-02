@@ -127,7 +127,7 @@ func (r *RaftNode) setHeartbeatTimeout() {
 
 func (r *RaftNode) run() {
 	for {
-		logger.Log.Info("Current state: ", r.getState())
+		logger.Log.Info("Current state: ", r.getState().getName())
 		switch r.getState() {
 		case FOLLOWER:
 			r.runFollower()
@@ -296,11 +296,21 @@ func (r *RaftNode) ReceiveRequestVote(args *RequestVoteArgs, reply *RequestVoteR
 		return nil
 	}
 
-	lastVoted, err := r.stable.Get(keyLastVotedCand)
-	if (err != nil && !errors.Is(err, ErrKeyNotFound)) || lastVoted != nil {
+	lastVotedTerm, err := r.stable.Get(keyLastVoteTerm)
+	if err != nil && !errors.Is(err, ErrKeyNotFound) {
+		return nil
+	}
+	lastVotedCand, err := r.stable.Get(keyLastVotedCand)
+	if err != nil && !errors.Is(err, ErrKeyNotFound) {
+		return nil
+	}
+
+	// if we have voted in this term, then don't give vote
+	if lastVotedTerm != nil && *lastVotedTerm == args.Term && lastVotedCand != nil {
 		return nil
 	}
 	r.stable.Set(keyLastVotedCand, args.CandidateID)
+	r.stable.Set(keyLastVoteTerm, args.Term)
 	reply.Granted = true
 	return nil
 }
