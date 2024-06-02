@@ -6,6 +6,7 @@ import (
 	"if3230-tubes-wreckitraft/constant"
 	"if3230-tubes-wreckitraft/logger"
 	"if3230-tubes-wreckitraft/shared"
+	"math/rand"
 	"sync"
 	"time"
 )
@@ -66,8 +67,17 @@ func NewRaftNode(address shared.Address, localID string) (*RaftNode, error) {
 	node.setCurrentTerm(*currentTerm)
 	node.setLastLog(lastLog.Index, lastLog.Term)
 
-	// set up heartbeat here
+	// Set up heartbeat
+	node.setHeartbeatTimeout()
+
 	return &node, nil
+}
+
+func (r *RaftNode) setHeartbeatTimeout() {
+	minDuration := time.Duration(constant.HEARTBEAT_INTERVAL)
+	maxDuration := 2 * time.Duration(constant.HEARTBEAT_INTERVAL)
+
+	r.heartbeatTimeout = minDuration + time.Duration(rand.Int63n(int64(maxDuration-minDuration)))
 }
 
 func (r *RaftNode) run() {
@@ -94,9 +104,14 @@ func (r *RaftNode) runFollower() {
 				continue
 			}
 			logger.Log.Warn(fmt.Sprintf("Timeout from node: %s", r.LocalID))
+
 			// time out occurs
 			r.clusterLeader = nil
 			r.setState(CANDIDATE)
+
+			// Reset the heartbeatTimeout
+			r.setHeartbeatTimeout()
+
 			return
 		}
 	}
