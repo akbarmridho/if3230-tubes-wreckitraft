@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"if3230-tubes-wreckitraft/shared"
 	"sync"
 	"sync/atomic"
 )
@@ -11,6 +12,8 @@ type raftState struct {
 	lastAppliedLog uint64
 	lastLogIndex   uint64 // cache of log store
 	lastLogTerm    uint64
+	nextIndex      map[shared.Address]uint64
+	matchIndex     map[shared.Address]uint64
 	routinesGroup  sync.WaitGroup
 	state          NodeType
 	lock           sync.Mutex

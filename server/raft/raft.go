@@ -96,7 +96,6 @@ func (r *RaftNode) runFollower() {
 }
 
 func (r *RaftNode) runCandidate() {
-
 }
 
 func (r *RaftNode) runLeader() {
@@ -138,6 +137,63 @@ func (r *RaftNode) getLastContact() time.Time {
 	lastContact := r.lastContact
 	r.lastContactLock.RUnlock()
 	return lastContact
+}
+
+func (r *RaftNode) setLastContact(lastContact time.Time) {
+	r.lastContactLock.RLock()
+	r.lastContact = lastContact
+	r.lastContactLock.RUnlock()
+}
+
+func (r *RaftNode) appendLog(data []byte) bool {
+	logs, err := r.logs.GetLogs()
+	if err != nil {
+		return false
+	}
+	index := r.lastLogIndex + 1
+	newLog := Log{
+		Index: index,
+		Term:  r.currentTerm,
+		Type:  COMMAND,
+		Data:  data,
+	}
+	logs = append(logs, newLog)
+	err = r.logs.StoreLogs(logs)
+	if err != nil {
+		return false
+	}
+	r.lastLogIndex++
+	r.lastLogTerm = r.currentTerm
+	//still not sure update ini dmn
+	//r.commitIndex = r.lastLogIndex
+	return true
+}
+
+func (r *RaftNode) appendEntries(address shared.Address) {
+	r.setLastContact(time.Now())
+
+	appendEntry := ReceiveAppendEntriesArgs{
+		term:         r.currentTerm,
+		leaderID:     r.localID,
+		prevLogIndex: r.lastLogIndex,
+		prevLogTerm:  r.lastLogTerm,
+		entries:      nil,
+		leaderCommit: r.commitIndex,
+	}
+
+	index, ok := r.nextIndex[address]
+	if !ok {
+		index = 0
+	}
+
+	if r.lastLogIndex >= index {
+		logs, _ := r.logs.GetLogs()
+		appendEntry.entries = logs[index:]
+
+		// Send request to follower address here and handle the response
+	}
+	// Send request for empty entries (heartbeat)
+
 }
 
 //
