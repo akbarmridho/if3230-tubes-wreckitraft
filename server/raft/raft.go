@@ -3,6 +3,7 @@ package raft
 import (
 	"errors"
 	"fmt"
+	"if3230-tubes-wreckitraft/constant"
 	"if3230-tubes-wreckitraft/logger"
 	"if3230-tubes-wreckitraft/shared"
 	"sync"
@@ -99,7 +100,37 @@ func (r *RaftNode) runCandidate() {
 }
 
 func (r *RaftNode) runLeader() {
+	// Create a ticker to signal when to send a heartbeat
+	heartbeatTicker := time.NewTicker(time.Duration(constant.HEARTBEAT_INTERVAL) * time.Millisecond)
+	defer heartbeatTicker.Stop()
 
+	go func() {
+		for {
+			select {
+			case <-heartbeatTicker.C:
+				go r.sendHeartbeat()
+			default:
+				if r.getState() != LEADER {
+					logger.Log.Info("%s:%d is no longer the leader", r.address.IP, r.address.Port)
+					return
+				}
+			}
+		}
+	}()
+}
+
+func (r *RaftNode) sendHeartbeat() {
+	logger.Log.Info("Leader is sending heartbeats...")
+
+	for _, addr := range r.clusters {
+		if addr.Equals(r.address) {
+			continue
+		}
+
+		// Send heartbeat
+		logger.Log.Info("Leader is sending heartbeat to %s:%d", addr.IP, addr.Port)
+		// go r.appendEntries(addr)
+	}
 }
 
 func (r *RaftNode) getLastContact() time.Time {
