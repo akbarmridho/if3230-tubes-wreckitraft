@@ -224,10 +224,11 @@ func (r *RaftNode) appendLog(data []byte) bool {
 	if err != nil {
 		return false
 	}
-	index := r.lastLogIndex + 1
+	index, term := r.getLastLog()
+	index += 1
 	newLog := Log{
 		Index: index,
-		Term:  r.currentTerm,
+		Term:  term,
 		Type:  COMMAND,
 		Data:  data,
 	}
@@ -236,8 +237,7 @@ func (r *RaftNode) appendLog(data []byte) bool {
 	if err != nil {
 		return false
 	}
-	r.lastLogIndex++
-	r.lastLogTerm = r.currentTerm
+	r.setLastLog(index, term)
 	//still not sure update ini dmn
 	//r.commitIndex = r.lastLogIndex
 	return true
@@ -246,16 +246,17 @@ func (r *RaftNode) appendLog(data []byte) bool {
 func (r *RaftNode) appendEntries(address shared.Address) {
 	r.setLastContact()
 
+	index, term := r.getLastLog()
 	appendEntry := ReceiveAppendEntriesArgs{
-		term:         r.currentTerm,
+		term:         r.getCurrentTerm(),
 		leaderID:     r.clusterLeader.ID,
-		prevLogIndex: r.lastLogIndex,
-		prevLogTerm:  r.lastLogTerm,
+		prevLogIndex: index,
+		prevLogTerm:  term,
 		entries:      nil,
-		leaderCommit: r.commitIndex,
+		leaderCommit: r.getCommitIndex(),
 	}
 
-	index, ok := r.nextIndex[address]
+	index, ok := r.getNextIndex(address)
 	if !ok {
 		index = 0
 	}
