@@ -99,8 +99,8 @@ func NewRaftNode(address shared.Address, localID string) (*RaftNode, error) {
 }
 
 func (r *RaftNode) setHeartbeatTimeout() {
-	minDuration := time.Duration(constant.HEARTBEAT_INTERVAL)
-	maxDuration := 2 * time.Duration(constant.HEARTBEAT_INTERVAL)
+	minDuration := constant.HEARTBEAT_INTERVAL * time.Millisecond
+	maxDuration := 2 * constant.HEARTBEAT_INTERVAL * time.Millisecond
 
 	r.heartbeatTimeout = util.RandomTimeout(minDuration, maxDuration)
 }
