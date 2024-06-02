@@ -136,6 +136,7 @@ func (r *RaftNode) runFollower() {
 
 			// Reset the heartbeatTimeout
 			r.setHeartbeatTimeout()
+			r.electionTimeout = util.RandomTimeout(constant.ELECTION_TIMEOUT_MIN*time.Millisecond, constant.ELECTION_TIMEOUT_MAX*time.Millisecond)
 
 			return
 		}
