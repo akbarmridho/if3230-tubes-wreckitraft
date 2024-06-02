@@ -1,9 +1,11 @@
 package server
 
 import (
+	"fmt"
 	"if3230-tubes-wreckitraft/server/raft"
 	"log"
 	"net"
+	"net/http"
 	"net/rpc"
 )
 
@@ -19,24 +21,26 @@ func NewServer(node *raft.RaftNode) *Server {
 
 func (s *Server) Start() error {
 	// Register Server
-	err := rpc.Register(s)
-	if err != nil {
-		return err
-	}
+	//err := rpc.Register(s)
+	//if err != nil {
+	//	return err
+	//}
 
 	// Register Server Raft Node
-	err = rpc.Register(s.raftNode)
+	err := rpc.Register(s.raftNode)
 	if err != nil {
 		return err
 	}
 
 	rpc.HandleHTTP()
-
+	port := fmt.Sprintf(":%d", s.raftNode.Config.Address.Port)
 	// Network Listener
-	listener, err := net.Listen("tcp", ":1234")
+	listener, err := net.Listen("tcp", port)
 	if err != nil {
 		return err
 	}
+
+	go http.Serve(listener, nil)
 
 	defer func(listener net.Listener) {
 		err := listener.Close()

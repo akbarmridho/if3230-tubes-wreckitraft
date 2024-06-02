@@ -83,8 +83,12 @@ func NewRaftNode(address shared.Address, localID string) (*RaftNode, error) {
 
 	var self NodeConfiguration
 
+	logger.Log.Info("Current ID: ", self.ID)
+
 	for _, cluster := range clusters {
-		if self.ID == cluster.ID {
+		if localID == cluster.ID {
+			logger.Log.Info("masuk euy")
+			logger.Log.Info(cluster)
 			self = cluster
 		}
 	}
@@ -94,8 +98,9 @@ func NewRaftNode(address shared.Address, localID string) (*RaftNode, error) {
 		logs:            store,
 		stable:          store,
 		clusters:        clusters,
-		electionTimeout: time.Millisecond * 500,
+		electionTimeout: time.Second * 5,
 	}
+	logger.Log.Info(node.Config.Address)
 	node.setCurrentTerm(*currentTerm)
 	node.setLastLog(lastLog.Index, lastLog.Term)
 
@@ -156,20 +161,21 @@ func (r *RaftNode) runFollower() {
 func (r *RaftNode) runCandidate() {
 	logger.Log.Info(fmt.Sprintf("Running node: %s as candidate", r.Config.ID))
 	votesChannel := r.startElection()
-	electionTimer := r.getTimeout(r.electionTimeout)
+	//electionTimer := r.getTimeout(r.electionTimeout)
 	majorityThreshold := (len(r.clusters) / 2) + 1
 	votesReceived := 0
 	for r.getState() == CANDIDATE {
 		select {
 		case v := <-votesChannel:
-			if v.term > r.currentTerm {
-				logger.Log.Warn(fmt.Sprintf("Encountered higher term during election for %s", r.Config.ID))
+			if v.Term > r.currentTerm {
+				logger.Log.Warn(fmt.Sprintf("Encountered higher Term during election for %s", r.Config.ID))
 				r.setState(FOLLOWER)
-				r.setCurrentTerm(v.term)
+				r.setCurrentTerm(v.Term)
 				return
 			}
-			if v.granted {
+			if v.Granted {
 				votesReceived += 1
+				logger.Log.Info(fmt.Sprintf("Received vote from: %s", v.VoterID))
 				if votesReceived >= majorityThreshold {
 					logger.Log.Warn(fmt.Sprintf("%s won the election", r.Config.ID))
 					r.setState(LEADER)
@@ -177,7 +183,7 @@ func (r *RaftNode) runCandidate() {
 					return
 				}
 			}
-		case <-electionTimer:
+		case <-time.After(time.Second * 5):
 			logger.Log.Warn(fmt.Sprintf("Election timeout for %s", r.Config.ID))
 			return
 		}
@@ -190,18 +196,18 @@ func (r *RaftNode) startElection() <-chan *RequestVoteResponse {
 
 	lastLogIndex, lastTerm := r.getLastLog()
 	req := RequestVoteArgs{
-		term:         r.getCurrentTerm(),
-		lastLogIndex: lastLogIndex,
-		lastLogTerm:  lastTerm,
+		Term:         r.getCurrentTerm(),
+		LastLogIndex: lastLogIndex,
+		LastLogTerm:  lastTerm,
 	}
-	req.candidate.address = r.Config.Address
-	req.candidate.id = r.Config.ID
+	req.CandidateID = r.Config.ID
 
 	requestVoteFromPeer := func(peer NodeConfiguration) {
 		r.goFunc(
 			func() {
 				var resp RequestVoteResponse
 				r.sendRequestVote(req, &resp, peer)
+
 				votesChannel <- &resp
 			},
 		)
@@ -210,9 +216,9 @@ func (r *RaftNode) startElection() <-chan *RequestVoteResponse {
 	for _, peer := range r.clusters {
 		if peer.ID == r.Config.ID {
 			votesChannel <- &RequestVoteResponse{
-				term:    req.term,
-				granted: true,
-				voterID: r.Config.ID,
+				Term:    req.Term,
+				Granted: true,
+				VoterID: r.Config.ID,
 			}
 		} else {
 			requestVoteFromPeer(peer)
@@ -281,23 +287,23 @@ func (r *RaftNode) setLastContact() {
 	r.lastContactLock.RUnlock()
 }
 
-func (r *RaftNode) ReceiveRequestVote(req RequestVoteArgs) RequestVoteResponse {
-	resp := RequestVoteResponse{
-		term:    r.getCurrentTerm(),
-		granted: false,
-		voterID: r.Config.ID,
-	}
-	if r.currentTerm > req.term {
-		return resp
+func (r *RaftNode) ReceiveRequestVote(args *RequestVoteArgs, reply *RequestVoteResponse) error {
+	logger.Log.Info("Received request vote from: ", args.CandidateID)
+	reply.Term = r.getCurrentTerm()
+	reply.Granted = false
+	reply.VoterID = r.Config.ID
+
+	if r.currentTerm > args.Term {
+		return nil
 	}
 
 	lastVoted, err := r.stable.Get(keyLastVotedCand)
 	if err != nil || lastVoted != nil {
-		return resp
+		return nil
 	}
 
-	resp.granted = true
-	return resp
+	reply.Granted = true
+	return nil
 }
 
 func (r *RaftNode) appendLog(data []byte) bool {
@@ -320,7 +326,7 @@ func (r *RaftNode) appendLog(data []byte) bool {
 	}
 	r.setLastLog(index, term)
 	//still not sure update ini dmn
-	//r.commitIndex = r.lastLogIndex
+	//r.commitIndex = r.LastLogIndex
 	return true
 }
 

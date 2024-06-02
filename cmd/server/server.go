@@ -3,11 +3,13 @@ package main
 import (
 	"fmt"
 	"github.com/alexflint/go-arg"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"if3230-tubes-wreckitraft/server"
 	"if3230-tubes-wreckitraft/server/raft"
 	"if3230-tubes-wreckitraft/shared"
 	"if3230-tubes-wreckitraft/shared/logger"
-	"log"
+	"os"
 )
 
 var args struct {
@@ -17,13 +19,16 @@ var args struct {
 }
 
 func main() {
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	// Initialize Raft
 	arg.MustParse(&args)
 
-	raftNode, err := raft.NewRaftNode(shared.Address{
-		Port: args.Port,
-		IP:   args.Host,
-	}, args.ID)
+	raftNode, err := raft.NewRaftNode(
+		shared.Address{
+			Port: args.Port,
+			IP:   args.Host,
+		}, args.ID,
+	)
 
 	if err != nil {
 		logger.Log.Fatal(fmt.Sprintf("Failed to start raft node %s", err.Error()))
@@ -31,9 +36,9 @@ func main() {
 
 	// Initialize Server
 	srv := server.NewServer(raftNode)
-	log.Println("Starting server...")
+	logger.Log.Info("Starting server")
 	// Start Server
 	if err := srv.Start(); err != nil {
-		log.Fatalf("failed to start server: %v", err)
+		logger.Log.Fatal("failed to start server: %v", err)
 	}
 }

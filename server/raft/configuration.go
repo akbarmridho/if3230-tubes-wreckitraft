@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"fmt"
 	"if3230-tubes-wreckitraft/server/raft/types"
 	"if3230-tubes-wreckitraft/shared"
 	"if3230-tubes-wreckitraft/shared/logger"
@@ -18,9 +19,9 @@ func NewNodeConfiguration(id string, address shared.Address) NodeConfiguration {
 	var host string
 
 	if address.IsHTTPS {
-		host = "https://" + address.IP + ":" + string(rune(address.Port))
+		host = fmt.Sprintf("%s:%d", address.IP, address.Port)
 	} else {
-		host = "http://" + address.IP + ":" + string(rune(address.Port))
+		host = fmt.Sprintf("%s:%d", address.IP, address.Port)
 	}
 
 	return NodeConfiguration{
@@ -31,7 +32,6 @@ func NewNodeConfiguration(id string, address shared.Address) NodeConfiguration {
 }
 
 func (n *NodeConfiguration) getRpcClient() error {
-
 	client, err := rpc.DialHTTP("tcp", n.host)
 
 	if err != nil {
@@ -59,6 +59,8 @@ func (n *NodeConfiguration) CallRPC(method string, args interface{}) (interface{
 		logger.Log.Warn("RPC call %s on node %s-%s fail %s", method, n.ID, n.host, err.Error())
 		return nil, types.NodeNetworkError
 	}
+
+	logger.Log.Info("Received response: ", response)
 
 	return response, nil
 }
