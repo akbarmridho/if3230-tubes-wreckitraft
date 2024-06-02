@@ -85,10 +85,15 @@ func NewRaftNode(address shared.Address, localID string) (*RaftNode, error) {
 	}
 
 	var self NodeConfiguration
+	nextIndex := map[shared.Address]uint64{}
+	matchIndex := map[shared.Address]uint64{}
 
 	for _, cluster := range clusters {
 		if self.ID == cluster.ID {
 			self = cluster
+		} else {
+			nextIndex[cluster.Address] = lastLog.Index
+			matchIndex[cluster.Address] = 0
 		}
 	}
 
@@ -361,7 +366,9 @@ func (r *RaftNode) appendEntries(address shared.Address) {
 		leaderCommit: r.getCommitIndex(),
 	}
 
-	index, ok := r.getNextIndex(address)
+	nextIndex := r.getNextIndex()
+	index, ok := nextIndex[address]
+
 	if !ok {
 		index = 0
 	}
