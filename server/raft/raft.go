@@ -49,7 +49,7 @@ func NewRaftNode(address shared.Address, localID string) (*RaftNode, error) {
 	}
 
 	logs, err := store.GetLogs()
-	if err != nil {
+	if err != nil && !errors.Is(err, ErrLogNotFound) {
 		return nil, err
 	}
 
@@ -61,18 +61,24 @@ func NewRaftNode(address shared.Address, localID string) (*RaftNode, error) {
 
 	// hardcode clusters. TODO delete
 	clusters := []NodeConfiguration{
-		NewNodeConfiguration("0", shared.Address{
-			IP:   "localhost",
-			Port: 5000,
-		}),
-		NewNodeConfiguration("1", shared.Address{
-			IP:   "localhost",
-			Port: 5001,
-		}),
-		NewNodeConfiguration("2", shared.Address{
-			IP:   "localhost",
-			Port: 5002,
-		}),
+		NewNodeConfiguration(
+			"0", shared.Address{
+				IP:   "localhost",
+				Port: 5000,
+			},
+		),
+		NewNodeConfiguration(
+			"1", shared.Address{
+				IP:   "localhost",
+				Port: 5001,
+			},
+		),
+		NewNodeConfiguration(
+			"2", shared.Address{
+				IP:   "localhost",
+				Port: 5002,
+			},
+		),
 	}
 
 	var self NodeConfiguration
@@ -138,7 +144,9 @@ func (r *RaftNode) runFollower() {
 
 			// Reset the heartbeatTimeout
 			r.setHeartbeatTimeout()
-			r.electionTimeout = util.RandomTimeout(constant.ELECTION_TIMEOUT_MIN*time.Millisecond, constant.ELECTION_TIMEOUT_MAX*time.Millisecond)
+			r.electionTimeout = util.RandomTimeout(
+				constant.ELECTION_TIMEOUT_MIN*time.Millisecond, constant.ELECTION_TIMEOUT_MAX*time.Millisecond,
+			)
 
 			return
 		}
