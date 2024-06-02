@@ -2,8 +2,8 @@ package raft
 
 import (
 	"fmt"
-	"if3230-tubes-wreckitraft/logger"
 	"if3230-tubes-wreckitraft/shared"
+	"if3230-tubes-wreckitraft/shared/logger"
 )
 
 type RequestVoteArgs struct {

@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"if3230-tubes-wreckitraft/constant"
-	"if3230-tubes-wreckitraft/logger"
 	"if3230-tubes-wreckitraft/shared"
+	"if3230-tubes-wreckitraft/shared/logger"
 	"if3230-tubes-wreckitraft/util"
 	"sync"
 	"time"
@@ -35,11 +35,11 @@ type RaftNode struct {
 
 func NewRaftNode(address shared.Address, localID string) (*RaftNode, error) {
 	store := Store{
-		BaseDir: "data",
+		BaseDir: "data_" + localID,
 	}
 
 	currentTerm, err := store.Get(keyCurrentTerm)
-	if err != nil && errors.Is(err, ErrKeyNotFound) {
+	if err != nil && !errors.Is(err, ErrKeyNotFound) {
 		return nil, err
 	}
 
@@ -84,10 +84,11 @@ func NewRaftNode(address shared.Address, localID string) (*RaftNode, error) {
 	}
 
 	node := RaftNode{
-		Config:   self,
-		logs:     store,
-		stable:   store,
-		clusters: clusters,
+		Config:          self,
+		logs:            store,
+		stable:          store,
+		clusters:        clusters,
+		electionTimeout: time.Millisecond * 500,
 	}
 	node.setCurrentTerm(*currentTerm)
 	node.setLastLog(lastLog.Index, lastLog.Term)
@@ -95,6 +96,7 @@ func NewRaftNode(address shared.Address, localID string) (*RaftNode, error) {
 	// Set up heartbeat
 	node.setHeartbeatTimeout()
 
+	node.goFunc(node.run)
 	return &node, nil
 }
 
