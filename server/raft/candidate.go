@@ -15,8 +15,9 @@ type RequestVoteArgs struct {
 type RequestVoteResponse struct {
 	term    uint64
 	granted bool
+	voterID string
 }
 
-func (r *RaftNode) sendRequestVote(req RequestVoteArgs, resp *RequestVoteResponse, id string, address shared.Address) {
+func (r *RaftNode) sendRequestVote(req RequestVoteArgs, resp *RequestVoteResponse, address shared.Address) {
 
 }

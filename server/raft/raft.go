@@ -11,12 +11,13 @@ import (
 
 type RaftNode struct {
 	raftState
-	address          shared.Address
+	Address shared.Address
+	LocalID string
+
 	clusters         []shared.Address
 	clusterLeader    *shared.Address
 	logs             LogStore
 	stable           StableStore
-	localID          string
 	heartbeatTimeout time.Duration
 	electionTimeout  time.Duration
 	lastContact      time.Time
@@ -56,8 +57,8 @@ func NewRaftNode(address shared.Address, localID string) (*RaftNode, error) {
 	}
 
 	node := RaftNode{
-		localID: localID,
-		address: address,
+		LocalID: localID,
+		Address: address,
 		logs:    store,
 		stable:  store,
 	}
@@ -82,15 +83,16 @@ func (r *RaftNode) run() {
 }
 
 func (r *RaftNode) runFollower() {
-
+	heartbeatTimer := r.getTimeout()
 	for r.getState() == FOLLOWER {
 		select {
-		case <-time.After(r.heartbeatTimeout):
+		case <-heartbeatTimer:
 			// not timed out
 			if time.Since(r.getLastContact()) < r.heartbeatTimeout {
+				heartbeatTimer = r.getTimeout()
 				continue
 			}
-			logger.Log.Warn(fmt.Sprintf("Timeout from node: %s", r.localID))
+			logger.Log.Warn(fmt.Sprintf("Timeout from node: %s", r.LocalID))
 			// time out occurs
 			r.clusterLeader = nil
 			r.setState(CANDIDATE)
@@ -100,11 +102,58 @@ func (r *RaftNode) runFollower() {
 }
 
 func (r *RaftNode) runCandidate() {
+	logger.Log.Info(fmt.Sprintf("Running node: %s as candidate", r.LocalID))
+	votesChannel := r.startElection()
+	select {
+	case <-votesChannel:
 
+	}
+}
+
+func (r *RaftNode) startElection() <-chan *RequestVoteResponse {
+	votesChannel := make(chan *RequestVoteResponse, len(r.clusters))
+	r.setCurrentTerm(r.getCurrentTerm() + 1)
+
+	lastLogIndex, lastTerm := r.getLastLog()
+	req := RequestVoteArgs{
+		term:         r.getCurrentTerm(),
+		lastLogIndex: lastLogIndex,
+		lastLogTerm:  lastTerm,
+	}
+	req.candidate.address = r.Address
+	req.candidate.id = r.LocalID
+
+	requestVoteFromPeer := func(peer shared.Address) {
+		r.goFunc(
+			func() {
+				var resp RequestVoteResponse
+				r.sendRequestVote(req, &resp, peer)
+				votesChannel <- &resp
+			},
+		)
+	}
+
+	for _, peer := range r.clusters {
+		if peer.IP == r.Address.IP && peer.Port == r.Address.Port {
+			votesChannel <- &RequestVoteResponse{
+				term:    req.term,
+				granted: true,
+				voterID: r.LocalID,
+			}
+		} else {
+			requestVoteFromPeer(peer)
+		}
+	}
+
+	return votesChannel
 }
 
 func (r *RaftNode) runLeader() {
 
+}
+
+func (r *RaftNode) getTimeout() <-chan time.Time {
+	return time.After(r.heartbeatTimeout)
 }
 
 func (r *RaftNode) getLastContact() time.Time {
@@ -118,6 +167,7 @@ func (r *RaftNode) ReceiveRequestVote(req RequestVoteArgs) RequestVoteResponse {
 	resp := RequestVoteResponse{
 		term:    r.getCurrentTerm(),
 		granted: false,
+		voterID: r.LocalID,
 	}
 	if r.currentTerm > req.term {
 		return resp
@@ -131,88 +181,6 @@ func (r *RaftNode) ReceiveRequestVote(req RequestVoteArgs) RequestVoteResponse {
 	resp.granted = true
 	return resp
 }
-
-//
-//// Separate command handling methods
-//func (rn *RaftNode) Ping() string {
-//	return "PONG"
-//}
-//
-//func (rn *RaftNode) Get(key string) string {
-//	rn.mu.Lock()
-//	defer rn.mu.Unlock()
-//	value, ok := rn.store[key]
-//	if !ok {
-//		return ""
-//	}
-//	return value
-//}
-//
-//func (rn *RaftNode) Set(key, value string) string {
-//	rn.mu.Lock()
-//	defer rn.mu.Unlock()
-//	rn.store[key] = value
-//	return "OK"
-//}
-//
-//func (rn *RaftNode) Strln(key string) string {
-//	rn.mu.Lock()
-//	defer rn.mu.Unlock()
-//	value, ok := rn.store[key]
-//	if !ok {
-//		return "0"
-//	}
-//	return strconv.Itoa(len(value))
-//}
-//
-//func (rn *RaftNode) Del(key string) string {
-//	rn.mu.Lock()
-//	defer rn.mu.Unlock()
-//	value, ok := rn.store[key]
-//	if !ok {
-//		return ""
-//	}
-//	delete(rn.store, key)
-//	return value
-//}
-//
-//func (rn *RaftNode) Append(key, value string) string {
-//	rn.mu.Lock()
-//	defer rn.mu.Unlock()
-//	_, ok := rn.store[key]
-//	if !ok {
-//		rn.store[key] = ""
-//	}
-//	rn.store[key] += value
-//	return "OK"
-//}
-//
-//// Execute command on leader
-//func (rn *RaftNode) Execute(args *CommandArgs, reply *CommandReply) error {
-//	if !rn.IsLeader() {
-//		return errors.New("not the leader")
-//	}
-//	var result string
-//	switch args.Command {
-//	case "ping":
-//		result = rn.Ping()
-//	case "get":
-//		result = rn.Get(args.Key)
-//	case "set":
-//		result = rn.Set(args.Key, args.Value)
-//	case "strln":
-//		result = rn.Strln(args.Key)
-//	case "del":
-//		result = rn.Del(args.Key)
-//	case "append":
-//		result = rn.Append(args.Key, args.Value)
-//	default:
-//		return errors.New("unknown command")
-//	}
-//	reply.Result = result
-//	rn.AppendLog(args.Command + " " + args.Key + " " + args.Value)
-//	return nil
-//}
 
 type CommandArgs struct {
 	Command string
