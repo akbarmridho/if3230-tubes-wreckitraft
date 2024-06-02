@@ -6,7 +6,7 @@ import (
 	"if3230-tubes-wreckitraft/constant"
 	"if3230-tubes-wreckitraft/logger"
 	"if3230-tubes-wreckitraft/shared"
-	"math/rand"
+	"if3230-tubes-wreckitraft/util"
 	"sync"
 	"time"
 )
@@ -102,7 +102,7 @@ func (r *RaftNode) setHeartbeatTimeout() {
 	minDuration := time.Duration(constant.HEARTBEAT_INTERVAL)
 	maxDuration := 2 * time.Duration(constant.HEARTBEAT_INTERVAL)
 
-	r.heartbeatTimeout = minDuration + time.Duration(rand.Int63n(int64(maxDuration-minDuration)))
+	r.heartbeatTimeout = util.RandomTimeout(minDuration, maxDuration)
 }
 
 func (r *RaftNode) run() {
