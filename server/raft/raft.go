@@ -2,6 +2,8 @@ package raft
 
 import (
 	"errors"
+	"fmt"
+	"if3230-tubes-wreckitraft/logger"
 	"if3230-tubes-wreckitraft/shared"
 	"sync"
 	"time"
@@ -17,6 +19,8 @@ type RaftNode struct {
 	localID          string
 	heartbeatTimeout time.Duration
 	electionTimeout  time.Duration
+	lastContact      time.Time
+	lastContactLock  sync.RWMutex
 
 	// channels for communication among threads
 	shutdownChannel chan struct{} // for shutdown to exit
@@ -74,6 +78,20 @@ func (r *RaftNode) run() {
 
 func (r *RaftNode) runFollower() {
 
+	for r.getState() == FOLLOWER {
+		select {
+		case <-time.After(r.heartbeatTimeout):
+			// not timed out
+			if time.Since(r.getLastContact()) < r.heartbeatTimeout {
+				continue
+			}
+			logger.Log.Warn(fmt.Sprintf("Timeout from node: %s", r.localID))
+			// time out occurs
+			r.clusterLeader = nil
+			r.setState(CANDIDATE)
+			return
+		}
+	}
 }
 
 func (r *RaftNode) runCandidate() {
@@ -82,6 +100,13 @@ func (r *RaftNode) runCandidate() {
 
 func (r *RaftNode) runLeader() {
 
+}
+
+func (r *RaftNode) getLastContact() time.Time {
+	r.lastContactLock.RLock()
+	lastContact := r.lastContact
+	r.lastContactLock.RUnlock()
+	return lastContact
 }
 
 //
