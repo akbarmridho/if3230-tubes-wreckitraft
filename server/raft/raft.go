@@ -194,6 +194,12 @@ func (r *RaftNode) getLastContact() time.Time {
 	return lastContact
 }
 
+func (r *RaftNode) setLastContact() {
+	r.lastContactLock.RLock()
+	r.lastContact = time.Now()
+	r.lastContactLock.RUnlock()
+}
+
 func (r *RaftNode) ReceiveRequestVote(req RequestVoteArgs) RequestVoteResponse {
 	resp := RequestVoteResponse{
 		term:    r.getCurrentTerm(),
