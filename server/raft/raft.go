@@ -19,6 +19,9 @@ type RaftNode struct {
 	clusterLeader     *NodeConfiguration
 	clusterLeaderLock sync.RWMutex
 
+	inMemLogs     []Log
+	inMemLogsLock sync.RWMutex
+
 	logs             LogStore
 	stable           StableStore
 	heartbeatTimeout time.Duration
@@ -290,11 +293,21 @@ func (r *RaftNode) ReceiveRequestVote(req RequestVoteArgs) RequestVoteResponse {
 	return resp
 }
 
+func (r *RaftNode) getInMemLogs() []Log {
+	r.inMemLogsLock.Lock()
+	log := r.inMemLogs
+	r.inMemLogsLock.Unlock()
+	return log
+}
+
+func (r *RaftNode) setInMemLogs(logs []Log) {
+	r.inMemLogsLock.Lock()
+	r.inMemLogs = logs
+	r.inMemLogsLock.Unlock()
+}
+
 func (r *RaftNode) appendLog(data []byte) bool {
-	logs, err := r.logs.GetLogs()
-	if err != nil {
-		return false
-	}
+	inMemLogs := r.getInMemLogs()
 	index, term := r.getLastLog()
 	index += 1
 	newLog := Log{
@@ -303,14 +316,25 @@ func (r *RaftNode) appendLog(data []byte) bool {
 		Type:  COMMAND,
 		Data:  data,
 	}
+	inMemLogs = append(inMemLogs, newLog)
+	r.setInMemLogs(inMemLogs)
+	r.setLastLog(index, term)
+	return true
+}
+
+func (r *RaftNode) commitLog() bool {
+	logs, err := r.logs.GetLogs()
+	if err != nil {
+		return false
+	}
+	index, _ := r.getLastLog()
+	newLog := r.inMemLogs[index]
 	logs = append(logs, newLog)
 	err = r.logs.StoreLogs(logs)
 	if err != nil {
 		return false
 	}
-	r.setLastLog(index, term)
-	//still not sure update ini dmn
-	//r.commitIndex = r.lastLogIndex
+	r.commitIndex = index
 	return true
 }
 
