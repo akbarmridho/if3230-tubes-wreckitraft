@@ -1,7 +1,7 @@
 package server
 
 import (
-	"if3230-tubes-wreckitraft/raft"
+	"if3230-tubes-wreckitraft/server/raft"
 	"log"
 	"net"
 	"net/rpc"
@@ -54,12 +54,12 @@ func (s *Server) Start() error {
 	}
 }
 
-func (s *Server) Execute(args *raft.CommandArgs, reply *raft.CommandReply) error {
-	log.Printf("Received Execute command: %s %s %s", args.Command, args.Key, args.Value)
-	return s.raftNode.Execute(args, reply)
-}
-
-func (s *Server) RequestLog(args *raft.LogArgs, reply *raft.LogReply) error {
-	log.Println("Received RequestLog command")
-	return s.raftNode.RequestLog(args, reply)
-}
+//func (s *Server) Execute(args *raft.CommandArgs, reply *raft.CommandReply) error {
+//	log.Printf("Received Execute command: %s %s %s", args.Command, args.Key, args.Value)
+//	return s.raftNode.Execute(args, reply)
+//}
+//
+//func (s *Server) RequestLog(args *raft.LogArgs, reply *raft.LogReply) error {
+//	log.Println("Received RequestLog command")
+//	return s.raftNode.RequestLog(args, reply)
+//}

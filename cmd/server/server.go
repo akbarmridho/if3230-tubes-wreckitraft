@@ -1,8 +1,8 @@
 package main
 
 import (
-	"if3230-tubes-wreckitraft/raft"
 	"if3230-tubes-wreckitraft/server"
+	"if3230-tubes-wreckitraft/server/raft"
 	"log"
 )
 
