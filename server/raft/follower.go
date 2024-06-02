@@ -1,5 +1,7 @@
 package raft
 
+import "if3230-tubes-wreckitraft/logger"
+
 type ReceiveAppendEntriesArgs struct {
 	term         uint64
 	leaderID     string
@@ -19,6 +21,12 @@ func (r *RaftNode) ReceiveAppendEntries(args *ReceiveAppendEntriesArgs, reply *R
 
 	response := ReceiveAppendEntriesResponse{}
 	reply = &response
+
+	// Receive heartbeat
+	if r.getState() == FOLLOWER {
+		logger.Log.Info("%s:%d receiving heartbeat", r.Address.IP, r.Address.Port)
+		r.setLastContact()
+	}
 
 	return nil
 }
