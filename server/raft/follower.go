@@ -24,7 +24,7 @@ func (r *RaftNode) ReceiveAppendEntries(args *ReceiveAppendEntriesArgs, reply *R
 
 	// Receive heartbeat
 	if r.getState() == FOLLOWER {
-		logger.Log.Info("%s:%d receiving heartbeat", r.Address.IP, r.Address.Port)
+		logger.Log.Info("%s:%d receiving heartbeat", r.Config.Address.IP, r.Config.Address.Port)
 		r.setLastContact()
 	}
 
