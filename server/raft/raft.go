@@ -12,12 +12,13 @@ import (
 
 type RaftNode struct {
 	raftState
-	address          shared.Address
-	clusters         []shared.Address
-	clusterLeader    *shared.Address
+	Address shared.Address
+	LocalID string
+
+	clusters         []NodeConfiguration
+	clusterLeader    *NodeConfiguration
 	logs             LogStore
 	stable           StableStore
-	localID          string
 	heartbeatTimeout time.Duration
 	electionTimeout  time.Duration
 	lastContact      time.Time
@@ -40,6 +41,11 @@ func NewRaftNode(address shared.Address, localID string) (*RaftNode, error) {
 		return nil, err
 	}
 
+	if currentTerm == nil {
+		newTerm := uint64(0)
+		currentTerm = &newTerm
+	}
+
 	logs, err := store.GetLogs()
 	if err != nil {
 		return nil, err
@@ -52,12 +58,12 @@ func NewRaftNode(address shared.Address, localID string) (*RaftNode, error) {
 	}
 
 	node := RaftNode{
-		localID: localID,
-		address: address,
+		LocalID: localID,
+		Address: address,
 		logs:    store,
 		stable:  store,
 	}
-	node.setCurrentTerm(currentTerm)
+	node.setCurrentTerm(*currentTerm)
 	node.setLastLog(lastLog.Index, lastLog.Term)
 
 	// set up heartbeat here
@@ -78,15 +84,16 @@ func (r *RaftNode) run() {
 }
 
 func (r *RaftNode) runFollower() {
-
+	heartbeatTimer := r.getTimeout()
 	for r.getState() == FOLLOWER {
 		select {
-		case <-time.After(r.heartbeatTimeout):
+		case <-heartbeatTimer:
 			// not timed out
 			if time.Since(r.getLastContact()) < r.heartbeatTimeout {
+				heartbeatTimer = r.getTimeout()
 				continue
 			}
-			logger.Log.Warn(fmt.Sprintf("Timeout from node: %s", r.localID))
+			logger.Log.Warn(fmt.Sprintf("Timeout from node: %s", r.LocalID))
 			// time out occurs
 			r.clusterLeader = nil
 			r.setState(CANDIDATE)
@@ -96,6 +103,50 @@ func (r *RaftNode) runFollower() {
 }
 
 func (r *RaftNode) runCandidate() {
+	logger.Log.Info(fmt.Sprintf("Running node: %s as candidate", r.LocalID))
+	votesChannel := r.startElection()
+	select {
+	case <-votesChannel:
+
+	}
+}
+
+func (r *RaftNode) startElection() <-chan *RequestVoteResponse {
+	votesChannel := make(chan *RequestVoteResponse, len(r.clusters))
+	r.setCurrentTerm(r.getCurrentTerm() + 1)
+
+	lastLogIndex, lastTerm := r.getLastLog()
+	req := RequestVoteArgs{
+		term:         r.getCurrentTerm(),
+		lastLogIndex: lastLogIndex,
+		lastLogTerm:  lastTerm,
+	}
+	req.candidate.address = r.Address
+	req.candidate.id = r.LocalID
+
+	requestVoteFromPeer := func(peer shared.Address) {
+		r.goFunc(
+			func() {
+				var resp RequestVoteResponse
+				r.sendRequestVote(req, &resp, peer)
+				votesChannel <- &resp
+			},
+		)
+	}
+
+	for _, peer := range r.clusters {
+		if peer.Address.IP == r.Address.IP && peer.Address.Port == r.Address.Port {
+			votesChannel <- &RequestVoteResponse{
+				term:    req.term,
+				granted: true,
+				voterID: r.LocalID,
+			}
+		} else {
+			requestVoteFromPeer(peer.Address)
+		}
+	}
+
+	return votesChannel
 }
 
 func (r *RaftNode) runLeader() {
@@ -110,7 +161,7 @@ func (r *RaftNode) runLeader() {
 				go r.sendHeartbeat()
 			default:
 				if r.getState() != LEADER {
-					logger.Log.Info("%s:%d is no longer the leader", r.address.IP, r.address.Port)
+					logger.Log.Info("%s:%d is no longer the leader", r.Address.IP, r.Address.Port)
 					return
 				}
 			}
@@ -122,14 +173,18 @@ func (r *RaftNode) sendHeartbeat() {
 	logger.Log.Info("Leader is sending heartbeats...")
 
 	for _, addr := range r.clusters {
-		if addr.Equals(r.address) {
+		if addr.Address.Equals(r.Address) {
 			continue
 		}
 
 		// Send heartbeat
-		logger.Log.Info("Leader is sending heartbeat to %s:%d", addr.IP, addr.Port)
+		logger.Log.Info("Leader is sending heartbeat to %s:%d", addr.Address.IP, addr.Address.Port)
 		// go r.appendEntries(addr)
 	}
+}
+
+func (r *RaftNode) getTimeout() <-chan time.Time {
+	return time.After(r.heartbeatTimeout)
 }
 
 func (r *RaftNode) getLastContact() time.Time {
@@ -139,10 +194,29 @@ func (r *RaftNode) getLastContact() time.Time {
 	return lastContact
 }
 
-func (r *RaftNode) setLastContact(lastContact time.Time) {
+func (r *RaftNode) setLastContact() {
 	r.lastContactLock.RLock()
-	r.lastContact = lastContact
+	r.lastContact = time.Now()
 	r.lastContactLock.RUnlock()
+}
+
+func (r *RaftNode) ReceiveRequestVote(req RequestVoteArgs) RequestVoteResponse {
+	resp := RequestVoteResponse{
+		term:    r.getCurrentTerm(),
+		granted: false,
+		voterID: r.LocalID,
+	}
+	if r.currentTerm > req.term {
+		return resp
+	}
+
+	lastVoted, err := r.stable.Get(keyLastVotedCand)
+	if err != nil || lastVoted != nil {
+		return resp
+	}
+
+	resp.granted = true
+	return resp
 }
 
 func (r *RaftNode) appendLog(data []byte) bool {
@@ -170,11 +244,11 @@ func (r *RaftNode) appendLog(data []byte) bool {
 }
 
 func (r *RaftNode) appendEntries(address shared.Address) {
-	r.setLastContact(time.Now())
+	r.setLastContact()
 
 	appendEntry := ReceiveAppendEntriesArgs{
 		term:         r.currentTerm,
-		leaderID:     r.localID,
+		leaderID:     r.clusterLeader.ID,
 		prevLogIndex: r.lastLogIndex,
 		prevLogTerm:  r.lastLogTerm,
 		entries:      nil,
