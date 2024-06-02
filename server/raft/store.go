@@ -22,6 +22,9 @@ func (s Store) GetLogs() ([]Log, error) {
 	defer s.Lock.RUnlock()
 	file, err := os.Open(s.filepath("logs"))
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, ErrLogNotFound
+		}
 		return nil, err
 	}
 	defer file.Close()
@@ -102,3 +105,4 @@ func (s Store) Get(key StableKey) (*uint64, error) {
 }
 
 var ErrKeyNotFound = errors.New("key not found")
+var ErrLogNotFound = errors.New("log not found")

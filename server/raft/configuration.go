@@ -1,9 +1,9 @@
 package raft
 
 import (
-	"if3230-tubes-wreckitraft/logger"
 	"if3230-tubes-wreckitraft/server/raft/types"
 	"if3230-tubes-wreckitraft/shared"
+	"if3230-tubes-wreckitraft/shared/logger"
 	"net/rpc"
 )
 

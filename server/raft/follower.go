@@ -1,6 +1,8 @@
 package raft
 
-import "if3230-tubes-wreckitraft/logger"
+import (
+	"if3230-tubes-wreckitraft/shared/logger"
+)
 
 type ReceiveAppendEntriesArgs struct {
 	term         uint64
