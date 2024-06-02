@@ -109,6 +109,24 @@ func (r *RaftNode) getLastContact() time.Time {
 	return lastContact
 }
 
+func (r *RaftNode) ReceiveRequestVote(req RequestVoteArgs) RequestVoteResponse {
+	resp := RequestVoteResponse{
+		term:    r.getCurrentTerm(),
+		granted: false,
+	}
+	if r.currentTerm > req.term {
+		return resp
+	}
+
+	lastVoted, err := r.stable.Get(keyLastVotedCand)
+	if err != nil || lastVoted != nil {
+		return resp
+	}
+
+	resp.granted = true
+	return resp
+}
+
 //
 //// Separate command handling methods
 //func (rn *RaftNode) Ping() string {
