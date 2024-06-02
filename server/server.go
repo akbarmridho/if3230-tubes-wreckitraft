@@ -30,6 +30,8 @@ func (s *Server) Start() error {
 		return err
 	}
 
+	rpc.HandleHTTP()
+
 	// Network Listener
 	listener, err := net.Listen("tcp", ":1234")
 	if err != nil {

@@ -26,10 +26,15 @@ go build cmd/client/client.go
 go build cmd/server/server.go
 ```
 
-6. Run the server and client in different terminal
+6. Run Multiple server
+
 ```
-./server
+./server -id 0 -host localhost -port 5000
+./server -id 1 -host localhost -port 5001
+./server -id 2 -host localhost -port 5002
 ```
+
+7. Run the server and client in different terminal
 ```
 ./client
 ```
