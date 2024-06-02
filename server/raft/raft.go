@@ -59,10 +59,35 @@ func NewRaftNode(address shared.Address, localID string) (*RaftNode, error) {
 		lastLog = logs[lastIndex]
 	}
 
+	// hardcode clusters. TODO delete
+	clusters := []NodeConfiguration{
+		NewNodeConfiguration("0", shared.Address{
+			IP:   "localhost",
+			Port: 5000,
+		}),
+		NewNodeConfiguration("1", shared.Address{
+			IP:   "localhost",
+			Port: 5001,
+		}),
+		NewNodeConfiguration("2", shared.Address{
+			IP:   "localhost",
+			Port: 5002,
+		}),
+	}
+
+	var self NodeConfiguration
+
+	for _, cluster := range clusters {
+		if self.ID == cluster.ID {
+			self = cluster
+		}
+	}
+
 	node := RaftNode{
-		Config: NewNodeConfiguration(localID, address),
-		logs:   store,
-		stable: store,
+		Config:   self,
+		logs:     store,
+		stable:   store,
+		clusters: clusters,
 	}
 	node.setCurrentTerm(*currentTerm)
 	node.setLastLog(lastLog.Index, lastLog.Term)
