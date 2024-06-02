@@ -243,7 +243,7 @@ func (r *RaftNode) sendHeartbeat() {
 
 		// Send heartbeat
 		logger.Log.Info("Leader is sending heartbeat to %s:%d", peer.Address.IP, peer.Address.Port)
-		// go r.appendEntries(addr)
+		go r.appendEntries(peer.Address)
 	}
 }
 
