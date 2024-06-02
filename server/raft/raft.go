@@ -39,6 +39,11 @@ func NewRaftNode(address shared.Address, localID string) (*RaftNode, error) {
 		return nil, err
 	}
 
+	if currentTerm == nil {
+		newTerm := uint64(0)
+		currentTerm = &newTerm
+	}
+
 	logs, err := store.GetLogs()
 	if err != nil {
 		return nil, err
@@ -56,7 +61,7 @@ func NewRaftNode(address shared.Address, localID string) (*RaftNode, error) {
 		logs:    store,
 		stable:  store,
 	}
-	node.setCurrentTerm(currentTerm)
+	node.setCurrentTerm(*currentTerm)
 	node.setLastLog(lastLog.Index, lastLog.Term)
 
 	// set up heartbeat here
