@@ -79,26 +79,26 @@ func (s Store) Set(key StableKey, val uint64) error {
 	return nil
 }
 
-func (s Store) Get(key StableKey) (uint64, error) {
+func (s Store) Get(key StableKey) (*uint64, error) {
 	s.Lock.RLock()
 	defer s.Lock.RUnlock()
 
 	file, err := os.Open(s.filepath(key))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return 0, ErrKeyNotFound
+			return nil, ErrKeyNotFound
 		}
-		return 0, err
+		return nil, err
 	}
 	defer file.Close()
 
 	var val uint64
 	decoder := gob.NewDecoder(file)
 	if err := decoder.Decode(&val); err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	return val, nil
+	return &val, nil
 }
 
 var ErrKeyNotFound = errors.New("key not found")
