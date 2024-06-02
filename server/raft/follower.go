@@ -6,7 +6,7 @@ import (
 
 type ReceiveAppendEntriesArgs struct {
 	term         uint64
-	leaderID     string
+	leaderID     uint64
 	prevLogIndex uint64
 	prevLogTerm  uint64
 	entries      []Log

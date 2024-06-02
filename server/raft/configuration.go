@@ -9,13 +9,13 @@ import (
 )
 
 type NodeConfiguration struct {
-	ID        string
+	ID        uint64
 	host      string
 	Address   shared.Address
 	rpcClient *rpc.Client
 }
 
-func NewNodeConfiguration(id string, address shared.Address) NodeConfiguration {
+func NewNodeConfiguration(id uint64, address shared.Address) NodeConfiguration {
 	var host string
 
 	if address.IsHTTPS {

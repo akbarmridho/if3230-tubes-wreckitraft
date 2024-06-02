@@ -7,7 +7,7 @@ import (
 
 type RequestVoteArgs struct {
 	Term         uint64
-	CandidateID  string
+	CandidateID  uint64
 	LastLogIndex uint64
 	LastLogTerm  uint64
 }
@@ -15,7 +15,7 @@ type RequestVoteArgs struct {
 type RequestVoteResponse struct {
 	Term    uint64
 	Granted bool
-	VoterID string
+	VoterID uint64
 }
 
 func (r *RaftNode) sendRequestVote(req RequestVoteArgs, resp *RequestVoteResponse, peer NodeConfiguration) {

@@ -13,7 +13,7 @@ import (
 )
 
 var args struct {
-	ID   string `arg:"required" help:"node ID"`
+	ID   uint64 `arg:"required" help:"node ID"`
 	Host string `arg:"required" help:"host of the node"`
 	Port int    `arg:"required" help:"port of the node"`
 }

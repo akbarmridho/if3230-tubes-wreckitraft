@@ -45,29 +45,29 @@ func (r *raftState) setCommitIndex(commitIndex uint64) {
 	atomic.StoreUint64(&r.commitIndex, commitIndex)
 }
 
-func (r *raftState) getNextIndex(key shared.Address) (index uint64, bool2 bool) {
+func (r *raftState) getNextIndex() map[shared.Address]uint64 {
 	r.lock.Lock()
-	index, ok := r.nextIndex[key]
+	nextIndex := r.nextIndex
 	r.lock.Unlock()
-	return index, ok
+	return nextIndex
 }
 
-func (r *raftState) setNextIndex(key shared.Address, index uint64) {
+func (r *raftState) setNextIndex(nextIndex map[shared.Address]uint64) {
 	r.lock.Lock()
-	r.nextIndex[key] = index
+	r.nextIndex = nextIndex
 	r.lock.Unlock()
 }
 
-func (r *raftState) getMatchIndex(key shared.Address) (index uint64, bool2 bool) {
+func (r *raftState) getMatchIndex() map[shared.Address]uint64 {
 	r.lock.Lock()
-	index, ok := r.matchIndex[key]
+	matchIndex := r.matchIndex
 	r.lock.Unlock()
-	return index, ok
+	return matchIndex
 }
 
-func (r *raftState) setMatchIndex(key shared.Address, index uint64) {
+func (r *raftState) setMatchIndex(matchIndex map[shared.Address]uint64) {
 	r.lock.Lock()
-	r.matchIndex[key] = index
+	r.matchIndex = matchIndex
 	r.lock.Unlock()
 }
 

@@ -19,6 +19,9 @@ type RaftNode struct {
 	clusterLeader     *NodeConfiguration
 	clusterLeaderLock sync.RWMutex
 
+	inMemLogs     []Log
+	inMemLogsLock sync.RWMutex
+
 	logs             LogStore
 	stable           StableStore
 	heartbeatTimeout time.Duration
@@ -33,9 +36,9 @@ type RaftNode struct {
 	// channels for
 }
 
-func NewRaftNode(address shared.Address, localID string) (*RaftNode, error) {
+func NewRaftNode(address shared.Address, localID uint64) (*RaftNode, error) {
 	store := Store{
-		BaseDir: "data_" + localID,
+		BaseDir: fmt.Sprintf("data_%d", localID),
 	}
 
 	currentTerm, err := store.Get(keyCurrentTerm)
@@ -62,19 +65,19 @@ func NewRaftNode(address shared.Address, localID string) (*RaftNode, error) {
 	// hardcode clusters. TODO delete
 	clusters := []NodeConfiguration{
 		NewNodeConfiguration(
-			"0", shared.Address{
+			0, shared.Address{
 				IP:   "localhost",
 				Port: 5000,
 			},
 		),
 		NewNodeConfiguration(
-			"1", shared.Address{
+			1, shared.Address{
 				IP:   "localhost",
 				Port: 5001,
 			},
 		),
 		NewNodeConfiguration(
-			"2", shared.Address{
+			2, shared.Address{
 				IP:   "localhost",
 				Port: 5002,
 			},
@@ -82,6 +85,8 @@ func NewRaftNode(address shared.Address, localID string) (*RaftNode, error) {
 	}
 
 	var self NodeConfiguration
+	nextIndex := map[shared.Address]uint64{}
+	matchIndex := map[shared.Address]uint64{}
 
 	logger.Log.Info("Current ID: ", self.ID)
 
@@ -90,6 +95,9 @@ func NewRaftNode(address shared.Address, localID string) (*RaftNode, error) {
 			logger.Log.Info("masuk euy")
 			logger.Log.Info(cluster)
 			self = cluster
+		} else {
+			nextIndex[cluster.Address] = lastLog.Index
+			matchIndex[cluster.Address] = 0
 		}
 	}
 
@@ -98,9 +106,8 @@ func NewRaftNode(address shared.Address, localID string) (*RaftNode, error) {
 		logs:            store,
 		stable:          store,
 		clusters:        clusters,
-		electionTimeout: time.Second * 5,
+		electionTimeout: time.Millisecond * 500,
 	}
-	logger.Log.Info(node.Config.Address)
 	node.setCurrentTerm(*currentTerm)
 	node.setLastLog(lastLog.Index, lastLog.Term)
 
@@ -120,6 +127,7 @@ func (r *RaftNode) setHeartbeatTimeout() {
 
 func (r *RaftNode) run() {
 	for {
+		logger.Log.Info("Current state: ", r.getState())
 		switch r.getState() {
 		case FOLLOWER:
 			r.runFollower()
@@ -137,21 +145,16 @@ func (r *RaftNode) runFollower() {
 		select {
 		case <-heartbeatTimer:
 			// not timed out
+			r.setHeartbeatTimeout()
 			if time.Since(r.getLastContact()) < r.heartbeatTimeout {
 				heartbeatTimer = r.getTimeout(r.heartbeatTimeout)
 				continue
 			}
-			logger.Log.Warn(fmt.Sprintf("Timeout from node: %s", r.Config.ID))
+			logger.Log.Warn(fmt.Sprintf("Timeout from node: %d", r.Config.ID))
 
 			// time out occurs
 			r.clusterLeader = nil
 			r.setState(CANDIDATE)
-
-			// Reset the heartbeatTimeout
-			r.setHeartbeatTimeout()
-			r.electionTimeout = util.RandomTimeout(
-				constant.ELECTION_TIMEOUT_MIN*time.Millisecond, constant.ELECTION_TIMEOUT_MAX*time.Millisecond,
-			)
 
 			return
 		}
@@ -159,32 +162,29 @@ func (r *RaftNode) runFollower() {
 }
 
 func (r *RaftNode) runCandidate() {
-	logger.Log.Info(fmt.Sprintf("Running node: %s as candidate", r.Config.ID))
+	logger.Log.Info(fmt.Sprintf("Running node: %d as candidate", r.Config.ID))
 	votesChannel := r.startElection()
-	//electionTimer := r.getTimeout(r.electionTimeout)
+	r.electionTimeout = util.RandomTimeout(
+		constant.ELECTION_TIMEOUT_MIN*time.Millisecond, constant.ELECTION_TIMEOUT_MAX*time.Millisecond,
+	)
+	electionTimer := r.getTimeout(r.electionTimeout)
 	majorityThreshold := (len(r.clusters) / 2) + 1
 	votesReceived := 0
 	for r.getState() == CANDIDATE {
 		select {
 		case v := <-votesChannel:
-			if v.Term > r.currentTerm {
-				logger.Log.Warn(fmt.Sprintf("Encountered higher Term during election for %s", r.Config.ID))
-				r.setState(FOLLOWER)
-				r.setCurrentTerm(v.Term)
-				return
-			}
 			if v.Granted {
 				votesReceived += 1
-				logger.Log.Info(fmt.Sprintf("Received vote from: %s", v.VoterID))
+				logger.Log.Info(fmt.Sprintf("Received vote from: %d", v.VoterID))
 				if votesReceived >= majorityThreshold {
-					logger.Log.Warn(fmt.Sprintf("%s won the election", r.Config.ID))
+					logger.Log.Info(fmt.Sprintf("%d won the election", r.Config.ID))
 					r.setState(LEADER)
 					r.setClusterLeader(r.Config)
 					return
 				}
 			}
-		case <-time.After(time.Second * 5):
-			logger.Log.Warn(fmt.Sprintf("Election timeout for %s", r.Config.ID))
+		case <-electionTimer:
+			logger.Log.Warn(fmt.Sprintf("Election timeout for %d", r.Config.ID))
 			return
 		}
 	}
@@ -207,7 +207,6 @@ func (r *RaftNode) startElection() <-chan *RequestVoteResponse {
 			func() {
 				var resp RequestVoteResponse
 				r.sendRequestVote(req, &resp, peer)
-
 				votesChannel <- &resp
 			},
 		)
@@ -298,19 +297,29 @@ func (r *RaftNode) ReceiveRequestVote(args *RequestVoteArgs, reply *RequestVoteR
 	}
 
 	lastVoted, err := r.stable.Get(keyLastVotedCand)
-	if err != nil || lastVoted != nil {
+	if (err != nil && !errors.Is(err, ErrKeyNotFound)) || lastVoted != nil {
 		return nil
 	}
-
+	r.stable.Set(keyLastVotedCand, args.CandidateID)
 	reply.Granted = true
 	return nil
 }
 
+func (r *RaftNode) getInMemLogs() []Log {
+	r.inMemLogsLock.Lock()
+	log := r.inMemLogs
+	r.inMemLogsLock.Unlock()
+	return log
+}
+
+func (r *RaftNode) setInMemLogs(logs []Log) {
+	r.inMemLogsLock.Lock()
+	r.inMemLogs = logs
+	r.inMemLogsLock.Unlock()
+}
+
 func (r *RaftNode) appendLog(data []byte) bool {
-	logs, err := r.logs.GetLogs()
-	if err != nil {
-		return false
-	}
+	inMemLogs := r.getInMemLogs()
 	index, term := r.getLastLog()
 	index += 1
 	newLog := Log{
@@ -319,14 +328,25 @@ func (r *RaftNode) appendLog(data []byte) bool {
 		Type:  COMMAND,
 		Data:  data,
 	}
+	inMemLogs = append(inMemLogs, newLog)
+	r.setInMemLogs(inMemLogs)
+	r.setLastLog(index, term)
+	return true
+}
+
+func (r *RaftNode) commitLog() bool {
+	logs, err := r.logs.GetLogs()
+	if err != nil {
+		return false
+	}
+	index, _ := r.getLastLog()
+	newLog := r.inMemLogs[index]
 	logs = append(logs, newLog)
 	err = r.logs.StoreLogs(logs)
 	if err != nil {
 		return false
 	}
-	r.setLastLog(index, term)
-	//still not sure update ini dmn
-	//r.commitIndex = r.LastLogIndex
+	r.commitIndex = index
 	return true
 }
 
@@ -343,7 +363,9 @@ func (r *RaftNode) appendEntries(address shared.Address) {
 		leaderCommit: r.getCommitIndex(),
 	}
 
-	index, ok := r.getNextIndex(address)
+	nextIndex := r.getNextIndex()
+	index, ok := nextIndex[address]
+
 	if !ok {
 		index = 0
 	}
