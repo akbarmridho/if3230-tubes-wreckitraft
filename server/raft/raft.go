@@ -15,8 +15,10 @@ type RaftNode struct {
 	Address shared.Address
 	LocalID string
 
-	clusters         []shared.Address
-	clusterLeader    *shared.Address
+	clusters          []shared.Address
+	clusterLeader     *shared.Address
+	clusterLeaderLock sync.RWMutex
+
 	logs             LogStore
 	stable           StableStore
 	heartbeatTimeout time.Duration
@@ -84,13 +86,13 @@ func (r *RaftNode) run() {
 }
 
 func (r *RaftNode) runFollower() {
-	heartbeatTimer := r.getTimeout()
+	heartbeatTimer := r.getTimeout(r.heartbeatTimeout)
 	for r.getState() == FOLLOWER {
 		select {
 		case <-heartbeatTimer:
 			// not timed out
 			if time.Since(r.getLastContact()) < r.heartbeatTimeout {
-				heartbeatTimer = r.getTimeout()
+				heartbeatTimer = r.getTimeout(r.heartbeatTimeout)
 				continue
 			}
 			logger.Log.Warn(fmt.Sprintf("Timeout from node: %s", r.LocalID))
@@ -105,9 +107,31 @@ func (r *RaftNode) runFollower() {
 func (r *RaftNode) runCandidate() {
 	logger.Log.Info(fmt.Sprintf("Running node: %s as candidate", r.LocalID))
 	votesChannel := r.startElection()
-	select {
-	case <-votesChannel:
-
+	electionTimer := r.getTimeout(r.electionTimeout)
+	majorityThreshold := (len(r.clusters) / 2) + 1
+	votesReceived := 0
+	for r.getState() == CANDIDATE {
+		select {
+		case v := <-votesChannel:
+			if v.term > r.currentTerm {
+				logger.Log.Warn(fmt.Sprintf("Encountered higher term during election for %s", r.LocalID))
+				r.setState(FOLLOWER)
+				r.setCurrentTerm(v.term)
+				return
+			}
+			if v.granted {
+				votesReceived += 1
+				if votesReceived >= majorityThreshold {
+					logger.Log.Warn(fmt.Sprintf("%s won the election", r.LocalID))
+					r.setState(LEADER)
+					r.setClusterLeader(r.Address)
+					return
+				}
+			}
+		case <-electionTimer:
+			logger.Log.Warn(fmt.Sprintf("Election timeout for %s", r.LocalID))
+			return
+		}
 	}
 }
 
@@ -161,7 +185,7 @@ func (r *RaftNode) runLeader() {
 				go r.sendHeartbeat()
 			default:
 				if r.getState() != LEADER {
-					logger.Log.Info("%s:%d is no longer the leader", r.address.IP, r.address.Port)
+					logger.Log.Info(fmt.Sprintf("%s:%d is no longer the leader", r.Address.IP, r.Address.Port))
 					return
 				}
 			}
@@ -173,7 +197,7 @@ func (r *RaftNode) sendHeartbeat() {
 	logger.Log.Info("Leader is sending heartbeats...")
 
 	for _, addr := range r.clusters {
-		if addr.Equals(r.address) {
+		if addr.Equals(r.Address) {
 			continue
 		}
 
@@ -183,8 +207,15 @@ func (r *RaftNode) sendHeartbeat() {
 	}
 }
 
-func (r *RaftNode) getTimeout() <-chan time.Time {
-	return time.After(r.heartbeatTimeout)
+func (r *RaftNode) getTimeout(timeout time.Duration) <-chan time.Time {
+	return time.After(timeout)
+}
+
+func (r *RaftNode) setClusterLeader(address shared.Address) {
+	r.clusterLeaderLock.Lock()
+	defer r.clusterLeaderLock.Unlock()
+
+	r.clusterLeader = &address
 }
 
 func (r *RaftNode) getLastContact() time.Time {
