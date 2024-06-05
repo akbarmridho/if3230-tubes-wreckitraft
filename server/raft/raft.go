@@ -262,7 +262,7 @@ func (r *RaftNode) sendHeartbeat() {
 
 		// Send heartbeat
 		logger.Log.Info(fmt.Sprintf("Leader is sending heartbeat to %s:%d", peer.Address.IP, peer.Address.Port))
-		go r.appendEntries(peer.Address)
+		go r.appendEntries(peer)
 	}
 }
 
@@ -344,12 +344,11 @@ func (r *RaftNode) appendLog(data []byte) bool {
 	return true
 }
 
-func (r *RaftNode) appendEntries(address shared.Address) {
-
+func (r *RaftNode) appendEntries(peer NodeConfiguration) {
 	index, term := r.getLastLog()
 	appendEntry := ReceiveAppendEntriesArgs{
 		term:         r.getCurrentTerm(),
-		leaderID:     r.clusterLeader.ID,
+		leaderConfig: r.Config,
 		prevLogIndex: index,
 		prevLogTerm:  term,
 		entries:      nil,
@@ -357,19 +356,34 @@ func (r *RaftNode) appendEntries(address shared.Address) {
 	}
 
 	nextIndex := r.getNextIndex()
-	index, ok := nextIndex[address]
+	matchIndex := r.getMatchIndex()
+	index, ok := nextIndex[peer.Address]
 
 	if !ok {
 		index = 0
 	}
 
+	var resp ReceiveAppendEntriesResponse
 	if r.lastLogIndex >= index {
 		logs, _ := r.logs.GetLogs()
-		appendEntry.entries = logs[index:]
-
-		// Send request to follower address here and handle the response
+		for {
+			appendEntry.entries = logs[nextIndex[peer.Address]:]
+			r.sendAppendEntries(appendEntry, &resp, peer)
+			// Need to check function of resp.term
+			if resp.success {
+				logger.Log.Info("Success send append entries to %s", peer.ID)
+				nextIndex[peer.Address] += 1
+				r.setNextIndex(nextIndex)
+				matchIndex[peer.Address] += 1
+				r.setMatchIndex(matchIndex)
+				break
+			} else {
+				nextIndex[peer.Address] -= 1
+			}
+		}
+	} else {
+		r.sendAppendEntries(appendEntry, &resp, peer)
 	}
-	// Send request for empty entries (heartbeat)
 
 }
 

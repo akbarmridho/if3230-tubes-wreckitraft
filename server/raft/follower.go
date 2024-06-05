@@ -7,7 +7,7 @@ import (
 
 type ReceiveAppendEntriesArgs struct {
 	term         uint64
-	leaderID     uint64
+	leaderConfig NodeConfiguration
 	prevLogIndex uint64
 	prevLogTerm  uint64
 	entries      []Log
@@ -21,6 +21,12 @@ type ReceiveAppendEntriesResponse struct {
 
 // ReceiveAppendEntries Receive
 func (r *RaftNode) ReceiveAppendEntries(args *ReceiveAppendEntriesArgs, reply *ReceiveAppendEntriesResponse) error {
+	if r.getState() == CANDIDATE {
+		logger.Log.Info("%s as candidate receive heartbeat, converted to follower", r.Config.ID)
+		r.setState(FOLLOWER)
+		r.setClusterLeader(args.leaderConfig)
+	}
+
 	reply.term = r.currentTerm
 
 	// Receive heartbeat
