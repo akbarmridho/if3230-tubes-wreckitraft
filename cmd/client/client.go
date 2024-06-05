@@ -11,7 +11,7 @@ import (
 
 func main() {
 	// Connect to the server
-	cli, err := client.NewClient("localhost:1234")
+	cli, err := client.NewClient("localhost:5001")
 	if err != nil {
 		log.Fatalf("Failed to connect to server: %v", err)
 	}
