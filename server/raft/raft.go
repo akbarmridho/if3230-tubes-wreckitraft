@@ -38,9 +38,12 @@ type RaftNode struct {
 	lastLogIndex uint64
 	lastLogTerm  uint64
 	currentTerm  uint64
+
+	// FSM is the client state machine to apply commands to
+	fsm FSM
 }
 
-func NewRaftNode(address shared.Address, localID uint64) (*RaftNode, error) {
+func NewRaftNode(address shared.Address, fsm FSM, localID uint64) (*RaftNode, error) {
 	store := Store{
 		BaseDir: fmt.Sprintf("data_%d", localID),
 	}
@@ -107,6 +110,7 @@ func NewRaftNode(address shared.Address, localID uint64) (*RaftNode, error) {
 
 	node := RaftNode{
 		Config:          self,
+		fsm:             fsm,
 		logs:            store,
 		stable:          store,
 		clusters:        clusters,

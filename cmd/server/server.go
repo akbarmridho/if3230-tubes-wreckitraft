@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"github.com/alexflint/go-arg"
 	"github.com/rs/zerolog"
@@ -9,10 +11,8 @@ import (
 	"if3230-tubes-wreckitraft/server/raft"
 	"if3230-tubes-wreckitraft/shared"
 	"if3230-tubes-wreckitraft/shared/logger"
-	"os"
-	"bytes"
-	"encoding/json"
 	"net/http"
+	"os"
 )
 
 var args struct {
@@ -48,7 +48,9 @@ func main() {
 		shared.Address{
 			Port: args.Port,
 			IP:   args.Host,
-		}, args.ID,
+		},
+		nil, // todo edit this
+		args.ID,
 	)
 
 	if err != nil {
