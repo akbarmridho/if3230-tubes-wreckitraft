@@ -33,7 +33,14 @@ type RaftNode struct {
 	shutdownChannel chan struct{} // for shutdown to exit
 	shutdownLock    sync.Mutex
 
-	// channels for
+	// storage
+	state        string
+	storage      map[string]string
+	storageLock  sync.RWMutex
+	commitIndex  uint64
+	lastLogIndex uint64
+	lastLogTerm  uint64
+	currentTerm  uint64
 }
 
 func NewRaftNode(address shared.Address, localID uint64) (*RaftNode, error) {
@@ -386,87 +393,61 @@ func (r *RaftNode) appendEntries(address shared.Address) {
 
 }
 
-//
-//// Separate command handling methods
-//func (rn *RaftNode) Ping() string {
-//	return "PONG"
-//}
-//
-//func (rn *RaftNode) Get(key string) string {
-//	rn.mu.Lock()
-//	defer rn.mu.Unlock()
-//	value, ok := rn.store[key]
-//	if !ok {
-//		return ""
-//	}
-//	return value
-//}
-//
-//func (rn *RaftNode) Set(key, value string) string {
-//	rn.mu.Lock()
-//	defer rn.mu.Unlock()
-//	rn.store[key] = value
-//	return "OK"
-//}
-//
-//func (rn *RaftNode) Strln(key string) string {
-//	rn.mu.Lock()
-//	defer rn.mu.Unlock()
-//	value, ok := rn.store[key]
-//	if !ok {
-//		return "0"
-//	}
-//	return strconv.Itoa(len(value))
-//}
-//
-//func (rn *RaftNode) Del(key string) string {
-//	rn.mu.Lock()
-//	defer rn.mu.Unlock()
-//	value, ok := rn.store[key]
-//	if !ok {
-//		return ""
-//	}
-//	delete(rn.store, key)
-//	return value
-//}
-//
-//func (rn *RaftNode) Append(key, value string) string {
-//	rn.mu.Lock()
-//	defer rn.mu.Unlock()
-//	_, ok := rn.store[key]
-//	if !ok {
-//		rn.store[key] = ""
-//	}
-//	rn.store[key] += value
-//	return "OK"
-//}
-//
-//// Execute command on leader
-//func (rn *RaftNode) Execute(args *CommandArgs, reply *CommandReply) error {
-//	if !rn.IsLeader() {
-//		return errors.New("not the leader")
-//	}
-//	var result string
-//	switch args.Command {
-//	case "ping":
-//		result = rn.Ping()
-//	case "get":
-//		result = rn.Get(args.Key)
-//	case "set":
-//		result = rn.Set(args.Key, args.Value)
-//	case "strln":
-//		result = rn.Strln(args.Key)
-//	case "del":
-//		result = rn.Del(args.Key)
-//	case "append":
-//		result = rn.Append(args.Key, args.Value)
-//	default:
-//		return errors.New("unknown command")
-//	}
-//	reply.Result = result
-//	rn.AppendLog(args.Command + " " + args.Key + " " + args.Value)
-//	return nil
-//}
+func (r *RaftNode) Set(key, value string) error {
+	r.storageLock.Lock()
+	defer r.storageLock.Unlock()
+	r.storage[key] = value
+	return nil
+}
+
+func (r *RaftNode) Get(key string) (string, error) {
+	r.storageLock.RLock()
+	defer r.storageLock.RUnlock()
+	value, ok := r.storage[key]
+	if !ok {
+		return "", errors.New("key not found")
+	}
+	return value, nil
+}
+
+func (r *RaftNode) Delete(key string) error {
+	r.storageLock.Lock()
+	defer r.storageLock.Unlock()
+	delete(r.storage, key)
+	return nil
+}
+
+func (r *RaftNode) Append(key, value string) error {
+	r.storageLock.Lock()
+	defer r.storageLock.Unlock()
+	r.storage[key] += value
+	return nil
+}
+
+func (r *RaftNode) Strln(key string) (string, error) {
+	r.storageLock.RLock()
+	defer r.storageLock.RUnlock()
+	value, ok := r.storage[key]
+	if !ok {
+		return "", errors.New("key not found")
+	}
+	return fmt.Sprintf("%d", len(value)), nil
+}
+
+func (r *RaftNode) ApplySet(key, value string) error {
+	// Apply the command through Raft consensus
+	return r.Set(key, value)
+}
+
+func (r *RaftNode) ApplyDel(key string) error {
+	// Apply the command through Raft consensus
+	return r.Delete(key)
+}
+
+func (r *RaftNode) ApplyAppend(key, value string) error {
+	// Apply the command through Raft consensus
+	return r.Append(key, value)
+}
 
 type CommandArgs struct {
 	Command string
@@ -475,7 +456,8 @@ type CommandArgs struct {
 }
 
 type CommandReply struct {
-	Result string
+	Result        string
+	LeaderAddress string
 }
 
 type LogArgs struct{}
