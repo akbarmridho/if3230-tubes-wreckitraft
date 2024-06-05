@@ -316,6 +316,16 @@ func (r *RaftNode) ReceiveRequestVote(args *RequestVoteArgs, reply *RequestVoteR
 	if lastVotedTerm != nil && *lastVotedTerm == args.Term && lastVotedCand != nil {
 		return nil
 	}
+
+	lastLogTerm, lastLogIndex := r.getLastLog()
+	if lastLogTerm == args.LastLogTerm && lastLogIndex > args.LastLogIndex {
+		return nil
+	}
+
+	if lastLogTerm > args.LastLogTerm {
+		return nil
+	}
+
 	r.stable.Set(keyLastVotedCand, args.CandidateID)
 	r.stable.Set(keyLastVoteTerm, args.Term)
 	reply.Granted = true
