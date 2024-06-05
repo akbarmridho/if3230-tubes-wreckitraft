@@ -232,20 +232,16 @@ func (r *RaftNode) runLeader() {
 	heartbeatTicker := time.NewTicker(time.Duration(constant.HEARTBEAT_INTERVAL) * time.Millisecond)
 	defer heartbeatTicker.Stop()
 
-	go func() {
-		for {
-			select {
-			case <-heartbeatTicker.C:
-				go r.sendHeartbeat()
-			default:
-				if r.getState() != LEADER {
-					logger.Log.Info("%s:%d is no longer the leader", r.Config.Address.IP, r.Config.Address.Port)
-					logger.Log.Info(fmt.Sprintf("%s:%d is no longer the leader", r.Config.host, r.Config.Address.Port))
-					return
-				}
-			}
+	for r.getState() == LEADER {
+		select {
+		case <-heartbeatTicker.C:
+			r.sendHeartbeat()
+		default:
+			time.Sleep(1 * time.Millisecond)
 		}
-	}()
+	}
+
+	logger.Log.Info(fmt.Sprintf("%s:%d is no longer the leader", r.Config.host, r.Config.Address.Port))
 }
 
 func (r *RaftNode) sendHeartbeat() {
@@ -257,7 +253,7 @@ func (r *RaftNode) sendHeartbeat() {
 		}
 
 		// Send heartbeat
-		logger.Log.Info("Leader is sending heartbeat to %s:%d", peer.Address.IP, peer.Address.Port)
+		logger.Log.Info(fmt.Sprintf("Leader is sending heartbeat to %s:%d", peer.Address.IP, peer.Address.Port))
 		go r.appendEntries(peer.Address)
 	}
 }
