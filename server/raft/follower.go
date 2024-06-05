@@ -21,8 +21,9 @@ type ReceiveAppendEntriesResponse struct {
 
 // ReceiveAppendEntries Receive
 func (r *RaftNode) ReceiveAppendEntries(args *ReceiveAppendEntriesArgs, reply *ReceiveAppendEntriesResponse) error {
+	logger.Log.Info("Masuk ke sini ", r.getState())
 	if r.getState() == CANDIDATE {
-		logger.Log.Info("%s as candidate receive heartbeat, converted to follower", r.Config.ID)
+		logger.Log.Info(fmt.Sprintf("%d as candidate receive heartbeat, converted to follower", r.Config.ID))
 		r.setState(FOLLOWER)
 		r.setClusterLeader(args.LeaderConfig)
 	}
@@ -31,7 +32,7 @@ func (r *RaftNode) ReceiveAppendEntries(args *ReceiveAppendEntriesArgs, reply *R
 
 	// Receive heartbeat
 	if r.getState() == FOLLOWER {
-		logger.Log.Info("%s:%d receiving heartbeat", r.Config.Address.IP, r.Config.Address.Port)
+		logger.Log.Info(fmt.Sprintf("Node %d receiving heartbeat", r.Config.ID))
 		r.setLastContact()
 	}
 
@@ -40,7 +41,7 @@ func (r *RaftNode) ReceiveAppendEntries(args *ReceiveAppendEntriesArgs, reply *R
 	}
 
 	if args.Term < r.currentTerm {
-		logger.Log.Warn(fmt.Sprintf("Failed to receive append entries in node: %s because term < current term", r.Config.ID))
+		logger.Log.Warn(fmt.Sprintf("Failed to receive append entries in node: %d because term < current term", r.Config.ID))
 		reply.Success = false
 		return nil
 	}
@@ -52,7 +53,7 @@ func (r *RaftNode) ReceiveAppendEntries(args *ReceiveAppendEntriesArgs, reply *R
 			logs = logs[:args.PrevLogIndex]
 		}
 	} else {
-		logger.Log.Warn(fmt.Sprintf("Failed to receive append entries in node: %s because log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm", r.Config.ID))
+		logger.Log.Warn(fmt.Sprintf("Failed to receive append entries in node: %d because log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm", r.Config.ID))
 		reply.Success = false
 		return nil
 	}
