@@ -68,4 +68,5 @@ func main() {
 	if err := srv.Start(); err != nil {
 		logger.Log.Fatal("failed to start server: %v", err)
 	}
+	select {}
 }

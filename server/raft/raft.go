@@ -156,13 +156,13 @@ func (r *RaftNode) runFollower() {
 		select {
 		case <-heartbeatTimer:
 			// not timed out
-			r.setHeartbeatTimeout()
-			if time.Since(r.getLastContact()) < r.heartbeatTimeout {
-				heartbeatTimer = r.getTimeout(r.heartbeatTimeout)
+			heartbeatTimeout := r.heartbeatTimeout
+			if time.Since(r.getLastContact()) < heartbeatTimeout {
+				logger.Log.Info("Heartbeat not timed out")
+				heartbeatTimer = r.getTimeout(heartbeatTimeout)
 				continue
 			}
-			logger.Log.Warn(fmt.Sprintf("Timeout from node: %d", r.Config.ID))
-
+			logger.Log.Warn("Heartbeat timeout")
 			// time out occurs
 			r.clusterLeader = nil
 			r.setState(CANDIDATE)
@@ -184,6 +184,11 @@ func (r *RaftNode) runCandidate() {
 	for r.getState() == CANDIDATE {
 		select {
 		case v := <-votesChannel:
+			if v.Term > r.getCurrentTerm() {
+				r.setState(FOLLOWER)
+				r.setCurrentTerm(v.Term)
+				return
+			}
 			if v.Granted {
 				votesReceived += 1
 				logger.Log.Info(fmt.Sprintf("Received vote from: %d", v.VoterID))
@@ -240,6 +245,7 @@ func (r *RaftNode) startElection() <-chan *RequestVoteResponse {
 
 func (r *RaftNode) runLeader() {
 	// Create a ticker to signal when to send a heartbeat
+	r.sendHeartbeat()
 	heartbeatTicker := time.NewTicker(time.Duration(constant.HEARTBEAT_INTERVAL) * time.Millisecond)
 	defer heartbeatTicker.Stop()
 
@@ -247,8 +253,6 @@ func (r *RaftNode) runLeader() {
 		select {
 		case <-heartbeatTicker.C:
 			r.sendHeartbeat()
-		default:
-			time.Sleep(1 * time.Millisecond)
 		}
 	}
 
@@ -256,7 +260,7 @@ func (r *RaftNode) runLeader() {
 }
 
 func (r *RaftNode) sendHeartbeat() {
-	logger.Log.Info("Leader is sending heartbeats...")
+	logger.Log.Info(fmt.Sprintf("Sending heartbeat at: %s", time.Now()))
 
 	for _, peer := range r.clusters {
 		if peer.ID == r.Config.ID {
@@ -265,6 +269,7 @@ func (r *RaftNode) sendHeartbeat() {
 
 		// Send heartbeat
 		logger.Log.Info(fmt.Sprintf("Leader is sending heartbeat to %s:%d", peer.Address.IP, peer.Address.Port))
+
 		go r.appendEntries(peer)
 	}
 }

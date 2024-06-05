@@ -3,10 +3,13 @@ package raft
 import (
 	"fmt"
 	"if3230-tubes-wreckitraft/shared/logger"
+	"time"
 )
 
-func (r *RaftNode) sendAppendEntries(req ReceiveAppendEntriesArgs, resp *ReceiveAppendEntriesResponse, peer NodeConfiguration) {
-	logger.Log.Info("Sending append entries to: ", peer.ID)
+func (r *RaftNode) sendAppendEntries(
+	req ReceiveAppendEntriesArgs, resp *ReceiveAppendEntriesResponse, peer NodeConfiguration,
+) {
+	logger.Log.Info(fmt.Sprintf("Sending append entries to: %d at %s", peer.ID, time.Now()))
 	err := peer.getRpcClient()
 
 	if err != nil {
@@ -20,5 +23,4 @@ func (r *RaftNode) sendAppendEntries(req ReceiveAppendEntriesArgs, resp *Receive
 		logger.Log.Warn(fmt.Sprintf("Send append entries to: %d failed", peer.ID))
 		return
 	}
-	logger.Log.Info("Append entries response: ", *resp)
 }

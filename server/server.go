@@ -1,18 +1,18 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"if3230-tubes-wreckitraft/server/raft"
-	"log"
 	"net"
 	"net/http"
 	"net/rpc"
-	"errors"
 )
+
 type command struct {
-    Op    string `json:"op,omitempty"`
-    Key   string `json:"key,omitempty"`
-    Value string `json:"value,omitempty"`
+	Op    string `json:"op,omitempty"`
+	Key   string `json:"key,omitempty"`
+	Value string `json:"value,omitempty"`
 }
 type Server struct {
 	raftNode *raft.RaftNode
@@ -47,22 +47,7 @@ func (s *Server) Start() error {
 
 	go http.Serve(listener, nil)
 
-	defer func(listener net.Listener) {
-		err := listener.Close()
-		if err != nil {
-			log.Fatalf("listener close error: %v", err)
-			return
-		}
-	}(listener)
-
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			log.Printf("connection accept error: %v", err)
-			continue
-		}
-		go rpc.ServeConn(conn)
-	}
+	return nil
 }
 
 func (s *Server) Apply(args *raft.CommandArgs, reply *raft.CommandReply) error {
@@ -93,6 +78,7 @@ func (s *Server) Apply(args *raft.CommandArgs, reply *raft.CommandReply) error {
 	}
 	return nil
 }
+
 //func (s *Server) Execute(args *raft.CommandArgs, reply *raft.CommandReply) error {
 //	log.Printf("Received Execute command: %s %s %s", args.Command, args.Key, args.Value)
 //	return s.raftNode.Execute(args, reply)

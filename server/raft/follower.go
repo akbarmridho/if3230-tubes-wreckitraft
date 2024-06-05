@@ -3,6 +3,7 @@ package raft
 import (
 	"fmt"
 	"if3230-tubes-wreckitraft/shared/logger"
+	"time"
 )
 
 type ReceiveAppendEntriesArgs struct {
@@ -21,8 +22,9 @@ type ReceiveAppendEntriesResponse struct {
 
 // ReceiveAppendEntries Receive
 func (r *RaftNode) ReceiveAppendEntries(args *ReceiveAppendEntriesArgs, reply *ReceiveAppendEntriesResponse) error {
-	logger.Log.Info("Masuk ke sini ", r.getState())
-	if r.getState() == CANDIDATE {
+	r.setLastContact()
+	currState := r.getState()
+	if currState == CANDIDATE || (args.Term > r.currentTerm && currState == LEADER) {
 		logger.Log.Info(fmt.Sprintf("%d as candidate receive heartbeat, converted to follower", r.Config.ID))
 		r.setState(FOLLOWER)
 		r.setClusterLeader(args.LeaderConfig)
@@ -31,9 +33,8 @@ func (r *RaftNode) ReceiveAppendEntries(args *ReceiveAppendEntriesArgs, reply *R
 	reply.Term = r.currentTerm
 
 	// Receive heartbeat
-	if r.getState() == FOLLOWER {
-		logger.Log.Info(fmt.Sprintf("Node %d receiving heartbeat", r.Config.ID))
-		r.setLastContact()
+	if currState == FOLLOWER {
+		logger.Log.Info(fmt.Sprintf("Node %d receiving heartbeat at: %s", r.Config.ID, time.Now()))
 	}
 
 	if len(args.Entries) == 0 {
@@ -41,7 +42,11 @@ func (r *RaftNode) ReceiveAppendEntries(args *ReceiveAppendEntriesArgs, reply *R
 	}
 
 	if args.Term < r.currentTerm {
-		logger.Log.Warn(fmt.Sprintf("Failed to receive append entries in node: %d because term < current term", r.Config.ID))
+		logger.Log.Warn(
+			fmt.Sprintf(
+				"Failed to receive append entries in node: %d because term < current term", r.Config.ID,
+			),
+		)
 		reply.Success = false
 		return nil
 	}
@@ -53,7 +58,12 @@ func (r *RaftNode) ReceiveAppendEntries(args *ReceiveAppendEntriesArgs, reply *R
 			logs = logs[:args.PrevLogIndex]
 		}
 	} else {
-		logger.Log.Warn(fmt.Sprintf("Failed to receive append entries in node: %d because log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm", r.Config.ID))
+		logger.Log.Warn(
+			fmt.Sprintf(
+				"Failed to receive append entries in node: %d because log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm",
+				r.Config.ID,
+			),
+		)
 		reply.Success = false
 		return nil
 	}
