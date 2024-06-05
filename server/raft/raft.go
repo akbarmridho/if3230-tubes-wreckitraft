@@ -367,18 +367,24 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration) {
 	if r.lastLogIndex >= index {
 		logs, _ := r.logs.GetLogs()
 		for {
-			appendEntry.entries = logs[nextIndex[peer.Address]:]
+			index, ok = nextIndex[peer.Address]
+			if !ok {
+				index = 0
+			}
+
+			appendEntry.entries = logs[index:]
 			r.sendAppendEntries(appendEntry, &resp, peer)
+
 			// Need to check function of resp.term
 			if resp.success {
 				logger.Log.Info("Success send append entries to %s", peer.ID)
-				nextIndex[peer.Address] += 1
+				nextIndex[peer.Address]++
 				r.setNextIndex(nextIndex)
-				matchIndex[peer.Address] += 1
+				matchIndex[peer.Address]++
 				r.setMatchIndex(matchIndex)
 				break
 			} else {
-				nextIndex[peer.Address] -= 1
+				nextIndex[peer.Address]--
 			}
 		}
 	} else {
