@@ -103,7 +103,7 @@ func NewRaftNode(address shared.Address, fsm FSM, localID uint64) (*RaftNode, er
 			logger.Log.Info(cluster)
 			self = cluster
 		} else {
-			nextIndex[cluster.Address] = lastLog.Index
+			nextIndex[cluster.Address] = lastLog.Index + 1
 			matchIndex[cluster.Address] = 0
 		}
 	}
@@ -118,6 +118,9 @@ func NewRaftNode(address shared.Address, fsm FSM, localID uint64) (*RaftNode, er
 	}
 	node.setCurrentTerm(*currentTerm)
 	node.setLastLog(lastLog.Index, lastLog.Term)
+
+	node.setNextIndex(nextIndex)
+	node.setMatchIndex(matchIndex)
 
 	// Set up heartbeat
 	node.setHeartbeatTimeout()
@@ -347,12 +350,12 @@ func (r *RaftNode) appendLog(data []byte) bool {
 func (r *RaftNode) appendEntries(peer NodeConfiguration) {
 	index, term := r.getLastLog()
 	appendEntry := ReceiveAppendEntriesArgs{
-		term:         r.getCurrentTerm(),
-		leaderConfig: r.Config,
-		prevLogIndex: index,
-		prevLogTerm:  term,
-		entries:      nil,
-		leaderCommit: r.getCommitIndex(),
+		Term:         r.getCurrentTerm(),
+		LeaderConfig: r.Config,
+		PrevLogIndex: index,
+		PrevLogTerm:  term,
+		Entries:      nil,
+		LeaderCommit: r.getCommitIndex(),
 	}
 
 	nextIndex := r.getNextIndex()
@@ -372,11 +375,11 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration) {
 				index = 0
 			}
 
-			appendEntry.entries = logs[index:]
+			appendEntry.Entries = logs[index:]
 			r.sendAppendEntries(appendEntry, &resp, peer)
 
 			// Need to check function of resp.term
-			if resp.success {
+			if resp.Success {
 				logger.Log.Info("Success send append entries to %s", peer.ID)
 				nextIndex[peer.Address]++
 				r.setNextIndex(nextIndex)

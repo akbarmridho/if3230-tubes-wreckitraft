@@ -17,7 +17,7 @@ func (r *RaftNode) sendAppendEntries(req ReceiveAppendEntriesArgs, resp *Receive
 	err = peer.rpcClient.Call("RaftNode.ReceiveAppendEntries", &req, resp)
 
 	if err != nil {
-		logger.Log.Warn(fmt.Sprintf("Send append entries to: %s failed", peer.ID))
+		logger.Log.Warn(fmt.Sprintf("Send append entries to: %d failed", peer.ID))
 		return
 	}
 	logger.Log.Info("Append entries response: ", *resp)
