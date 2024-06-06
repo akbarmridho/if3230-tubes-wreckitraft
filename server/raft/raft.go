@@ -31,9 +31,8 @@ type RaftNode struct {
 	shutdownLock    sync.Mutex
 
 	// storage
-	state        string
-	storage      map[string]string
-	storageLock  sync.RWMutex
+	state string
+
 	commitIndex  uint64
 	lastLogIndex uint64
 	lastLogTerm  uint64
@@ -411,71 +410,25 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration) {
 
 }
 
-func (r *RaftNode) Set(key, value string) error {
-	r.storageLock.Lock()
-	defer r.storageLock.Unlock()
-	r.storage[key] = value
+// Apply is used to apply a command to the FSM in a highly consistent
+// manner. This returns a future that can be used to wait on the application.
+// An optional timeout can be provided to limit the amount of time we wait
+// for the command to be started. This must be run on the leader or it
+// will fail.
+//
+// If the node discovers it is no longer the leader while applying the command,
+// it will return ErrLeadershipLost. There is no way to guarantee whether the
+// write succeeded or failed in this case. For example, if the leader is
+// partitioned it can't know if a quorum of followers wrote the log to disk. If
+// at least one did, it may survive into the next leader's term.
+//
+// If a user snapshot is restored while the command is in-flight, an
+// ErrAbortedByRestore is returned. In this case the write effectively failed
+// since its effects will not be present in the FSM after the restore.
+func (r *RaftNode) Apply(payload []byte) error {
+
+	// todo implement this
 	return nil
-}
-
-func (r *RaftNode) Get(key string) (string, error) {
-	r.storageLock.RLock()
-	defer r.storageLock.RUnlock()
-	value, ok := r.storage[key]
-	if !ok {
-		return "", errors.New("key not found")
-	}
-	return value, nil
-}
-
-func (r *RaftNode) Delete(key string) error {
-	r.storageLock.Lock()
-	defer r.storageLock.Unlock()
-	delete(r.storage, key)
-	return nil
-}
-
-func (r *RaftNode) Append(key, value string) error {
-	r.storageLock.Lock()
-	defer r.storageLock.Unlock()
-	r.storage[key] += value
-	return nil
-}
-
-func (r *RaftNode) Strln(key string) (string, error) {
-	r.storageLock.RLock()
-	defer r.storageLock.RUnlock()
-	value, ok := r.storage[key]
-	if !ok {
-		return "", errors.New("key not found")
-	}
-	return fmt.Sprintf("%d", len(value)), nil
-}
-
-func (r *RaftNode) ApplySet(key, value string) error {
-	// Apply the command through Raft consensus
-	return r.Set(key, value)
-}
-
-func (r *RaftNode) ApplyDel(key string) error {
-	// Apply the command through Raft consensus
-	return r.Delete(key)
-}
-
-func (r *RaftNode) ApplyAppend(key, value string) error {
-	// Apply the command through Raft consensus
-	return r.Append(key, value)
-}
-
-type CommandArgs struct {
-	Command string
-	Key     string
-	Value   string
-}
-
-type CommandReply struct {
-	Result        string
-	LeaderAddress string
 }
 
 type LogArgs struct{}

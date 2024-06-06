@@ -8,7 +8,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"if3230-tubes-wreckitraft/server"
-	"if3230-tubes-wreckitraft/server/raft"
 	"if3230-tubes-wreckitraft/shared"
 	"if3230-tubes-wreckitraft/shared/logger"
 	"net/http"
@@ -44,25 +43,20 @@ func main() {
 	// Initialize Raft
 	arg.MustParse(&args)
 
-	raftNode, err := raft.NewRaftNode(
-		shared.Address{
-			Port: args.Port,
-			IP:   args.Host,
-		},
-		nil, // todo edit this
-		args.ID,
-	)
-
-	if err != nil {
-		logger.Log.Fatal(fmt.Sprintf("Failed to start raft node %s", err.Error()))
-	}
-
 	// Register the server with the registry
 	serverAddress := fmt.Sprintf("%s:%d", args.Host, args.Port)
 	registerServer(serverAddress)
 
 	// Initialize Server
-	srv := server.NewServer(raftNode)
+	srv, err := server.NewServer(args.ID, shared.Address{
+		IP:   args.Host,
+		Port: args.Port,
+	})
+
+	if err != nil {
+		logger.Log.Fatal(fmt.Sprintf("Failed to create server %s", err.Error()))
+	}
+
 	logger.Log.Info("Starting server")
 	// Start Server
 	if err := srv.Start(); err != nil {

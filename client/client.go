@@ -1,6 +1,7 @@
 package client
 
 import (
+	"if3230-tubes-wreckitraft/server"
 	"if3230-tubes-wreckitraft/server/raft"
 	"log"
 	"net/rpc"
@@ -23,26 +24,26 @@ func NewClient(address string) (*Client, error) {
 }
 
 func (c *Client) Execute(command, key, value string) string {
-    args := &raft.CommandArgs{Command: command, Key: key, Value: value}
-    var reply raft.CommandReply
-    err := c.rpcClient.Call("Server.Apply", args, &reply)
-    if err != nil {
-        // if reply.LeaderAddress != "" {
-            log.Printf("Redirecting to leader at %s", reply.LeaderAddress)
-            c.serverAddress = reply.LeaderAddress
-            c.rpcClient, err = rpc.Dial("tcp", c.serverAddress)
-            if err != nil {
-                log.Fatalf("Failed to connect to new leader: %v", err)
-            }
-            err = c.rpcClient.Call("Server.Apply", args, &reply)
-            if err != nil {
-                log.Fatalf("Execute error after redirection: %v", err)
-            }
-        // } else {
-        //     log.Fatalf("Execute error: %v", err)
-        // }
-    }
-    return reply.Result
+	args := &server.CommandArgs{Command: command, Key: key, Value: value}
+	var reply server.CommandReply
+	err := c.rpcClient.Call("Server.Apply", args, &reply)
+	if err != nil {
+		// if reply.LeaderAddress != "" {
+		log.Printf("Redirecting to leader at %s", reply.LeaderAddress)
+		c.serverAddress = reply.LeaderAddress
+		c.rpcClient, err = rpc.Dial("tcp", c.serverAddress)
+		if err != nil {
+			log.Fatalf("Failed to connect to new leader: %v", err)
+		}
+		err = c.rpcClient.Call("Server.Execute", args, &reply)
+		if err != nil {
+			log.Fatalf("Execute error after redirection: %v", err)
+		}
+		// } else {
+		//     log.Fatalf("Execute error: %v", err)
+		// }
+	}
+	return reply.Result
 }
 
 // TODO: Request Log

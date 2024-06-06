@@ -1,27 +1,71 @@
 package server
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"if3230-tubes-wreckitraft/server/raft"
+	"if3230-tubes-wreckitraft/shared"
+	"if3230-tubes-wreckitraft/shared/logger"
 	"net"
 	"net/http"
 	"net/rpc"
+	"sync"
 )
 
-type command struct {
-	Op    string `json:"op,omitempty"`
-	Key   string `json:"key,omitempty"`
-	Value string `json:"value,omitempty"`
-}
-type Server struct {
-	raftNode *raft.RaftNode
+type CommandArgs struct {
+	Command string
+	Key     string
+	Value   string
 }
 
-func NewServer(node *raft.RaftNode) *Server {
-	return &Server{
-		raftNode: node,
+type CommandReply struct {
+	Result        string
+	LeaderAddress string
+}
+
+type Server struct {
+	raftNode    *raft.RaftNode
+	storage     map[string]string
+	storageLock sync.RWMutex
+}
+
+func NewServer(ID uint64, address shared.Address) (*Server, error) {
+	server := Server{}
+
+	raftNode, err := raft.NewRaftNode(
+		address,
+		&server,
+		ID,
+	)
+
+	if err != nil {
+		logger.Log.Fatal(fmt.Sprintf("Failed to start raft node %s", err.Error()))
+		return nil, err
 	}
+
+	server.raftNode = raftNode
+
+	return &server, nil
+}
+
+func (s *Server) Apply(log *raft.Log) interface{} {
+	var c CommandArgs
+	if err := json.Unmarshal(log.Data, &c); err != nil {
+		panic(fmt.Sprintf("failed to unmarshal command: %s", err.Error()))
+	}
+
+	switch c.Command {
+	case "set":
+		return s.ApplySet(c.Key, c.Value)
+	case "delete":
+		return s.ApplyDel(c.Key)
+	case "append":
+		return s.ApplyAppend(c.Key, c.Value)
+	default:
+		panic(fmt.Sprintf("unrecognized command op: %s", c.Command))
+	}
+	return nil
 }
 
 func (s *Server) Start() error {
@@ -50,23 +94,94 @@ func (s *Server) Start() error {
 	return nil
 }
 
-func (s *Server) Apply(args *raft.CommandArgs, reply *raft.CommandReply) error {
+func (s *Server) Set(key, value string) error {
+	s.storageLock.Lock()
+	defer s.storageLock.Unlock()
+	s.storage[key] = value
+	return nil
+}
+
+func (s *Server) Get(key string) (string, error) {
+	s.storageLock.RLock()
+	defer s.storageLock.RUnlock()
+	value, ok := s.storage[key]
+	if !ok {
+		return "", errors.New("key not found")
+	}
+	return value, nil
+}
+
+func (s *Server) Delete(key string) error {
+	s.storageLock.Lock()
+	defer s.storageLock.Unlock()
+	delete(s.storage, key)
+	return nil
+}
+
+func (s *Server) Append(key, value string) error {
+	s.storageLock.Lock()
+	defer s.storageLock.Unlock()
+	s.storage[key] += value
+	return nil
+}
+
+func (s *Server) Strln(key string) (string, error) {
+	s.storageLock.RLock()
+	defer s.storageLock.RUnlock()
+	value, ok := s.storage[key]
+	if !ok {
+		return "", errors.New("key not found")
+	}
+	return fmt.Sprintf("%d", len(value)), nil
+}
+
+func (s *Server) ApplySet(key, value string) error {
+	// Apply the command through Raft consensus
+	return s.Set(key, value)
+}
+
+func (s *Server) ApplyDel(key string) error {
+	// Apply the command through Raft consensus
+	return s.Delete(key)
+}
+
+func (s *Server) ApplyAppend(key, value string) error {
+	// Apply the command through Raft consensus
+	return s.Append(key, value)
+}
+
+func (s *Server) Execute(args *CommandArgs, reply *CommandReply) error {
 	//TODO Check Leader
 	switch args.Command {
 	case "set":
-		return s.raftNode.ApplySet(args.Key, args.Value)
+		b, err := json.Marshal(args)
+
+		if err != nil {
+			return err
+		}
+		return s.raftNode.Apply(b)
 	case "get":
-		value, err := s.raftNode.Get(args.Key)
+		value, err := s.Get(args.Key)
 		if err != nil {
 			return err
 		}
 		reply.Result = value
 	case "del":
-		return s.raftNode.ApplyDel(args.Key)
+		b, err := json.Marshal(args)
+
+		if err != nil {
+			return err
+		}
+		return s.raftNode.Apply(b)
 	case "append":
-		return s.raftNode.ApplyAppend(args.Key, args.Value)
+		b, err := json.Marshal(args)
+
+		if err != nil {
+			return err
+		}
+		return s.raftNode.Apply(b)
 	case "strln":
-		value, err := s.raftNode.Strln(args.Key)
+		value, err := s.Strln(args.Key)
 		if err != nil {
 			return err
 		}
@@ -78,13 +193,3 @@ func (s *Server) Apply(args *raft.CommandArgs, reply *raft.CommandReply) error {
 	}
 	return nil
 }
-
-//func (s *Server) Execute(args *raft.CommandArgs, reply *raft.CommandReply) error {
-//	log.Printf("Received Execute command: %s %s %s", args.Command, args.Key, args.Value)
-//	return s.raftNode.Execute(args, reply)
-//}
-//
-//func (s *Server) RequestLog(args *raft.LogArgs, reply *raft.LogReply) error {
-//	log.Println("Received RequestLog command")
-//	return s.raftNode.RequestLog(args, reply)
-//}

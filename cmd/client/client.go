@@ -2,17 +2,16 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"if3230-tubes-wreckitraft/client"
 	"log"
+	"math/rand"
+	"net/http"
 	"os"
 	"strings"
-	"net/http"
-	"encoding/json"
-	"math/rand"
 	"time"
 )
-
 
 func getServers() []string {
 	resp, err := http.Get("http://localhost:8080/servers")
