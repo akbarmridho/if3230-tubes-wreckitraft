@@ -20,14 +20,14 @@ type RequestVoteResponse struct {
 
 func (r *RaftNode) sendRequestVote(req RequestVoteArgs, resp *RequestVoteResponse, peer NodeConfiguration) {
 	logger.Log.Info("Sending request vote to: ", peer.ID)
-	err := peer.getRpcClient()
+	client, err := peer.GetRpcClient()
 
 	if err != nil {
 		logger.Log.Warn(err)
 		return
 	}
 
-	err = peer.rpcClient.Call("RaftNode.ReceiveRequestVote", &req, resp)
+	err = client.Call("RaftNode.ReceiveRequestVote", &req, resp)
 
 	if err != nil {
 		logger.Log.Warn(fmt.Sprintf("Send request vote to: %s failed", peer.ID))
