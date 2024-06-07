@@ -33,11 +33,6 @@ type RaftNode struct {
 	// storage
 	state string
 
-	commitIndex  uint64
-	lastLogIndex uint64
-	lastLogTerm  uint64
-	currentTerm  uint64
-
 	// FSM is the client state machine to apply commands to
 	fsm FSM
 }

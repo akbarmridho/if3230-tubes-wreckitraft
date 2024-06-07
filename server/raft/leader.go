@@ -50,9 +50,9 @@ func (r *RaftNode) replicateLog() {
 	majorityIndex := matchIndices[(len(matchIndices)-1)/2]
 
 	logs, _ := r.logs.GetLogs()
-	if majorityIndex > r.commitIndex && logs[majorityIndex].Term == r.currentTerm {
+	if majorityIndex > r.getCommitIndex() && logs[majorityIndex].Term == r.currentTerm {
 		r.commitLog(majorityIndex)
-		r.commitIndex = majorityIndex
+		r.setCommitIndex(majorityIndex)
 	}
 
 }
