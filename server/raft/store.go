@@ -35,7 +35,7 @@ func (s Store) GetLogs() ([]Log, error) {
 		return nil, err
 	}
 
-	return logs, errors.New("log not found on index")
+	return logs, ErrLogNotFound
 }
 
 func (s Store) StoreLogs(logs []Log) error {
