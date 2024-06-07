@@ -29,7 +29,8 @@ func (r *RaftNode) sendAppendEntries(
 }
 
 func (r *RaftNode) replicateLog() {
-	// TODO: Call reset heartbeat ticker here
+	// Reset heartbeat ticker
+	r.resetHeartbeatTicker()
 
 	for _, peer := range r.clusters {
 		if peer.ID == r.Config.ID {

@@ -35,6 +35,8 @@ type RaftNode struct {
 
 	// FSM is the client state machine to apply commands to
 	fsm FSM
+
+	heartbeatTicker *time.Ticker
 }
 
 func NewRaftNode(address shared.Address, fsm FSM, localID uint64) (*RaftNode, error) {
@@ -238,19 +240,34 @@ func (r *RaftNode) startElection() <-chan *RequestVoteResponse {
 }
 
 func (r *RaftNode) runLeader() {
-	// Create a ticker to signal when to send a heartbeat
-	r.sendHeartbeat()
-	heartbeatTicker := time.NewTicker(time.Duration(constant.HEARTBEAT_INTERVAL) * time.Millisecond)
-	defer heartbeatTicker.Stop()
+    r.sendHeartbeat()
+    r.createHeartbeatTicker()
+    defer r.stopHeartbeatTicker()
 
-	for r.getState() == LEADER {
-		select {
-		case <-heartbeatTicker.C:
-			r.sendHeartbeat()
-		}
-	}
+    for r.getState() == LEADER {
+        select {
+        case <-r.heartbeatTicker.C:
+            r.sendHeartbeat()
+        }
+    }
 
-	logger.Log.Info(fmt.Sprintf("%s:%d is no longer the leader", r.Config.host, r.Config.Address.Port))
+    logger.Log.Info(fmt.Sprintf("%s:%d is no longer the leader", r.Config.host, r.Config.Address.Port))
+}
+
+func (r *RaftNode) createHeartbeatTicker() {
+    r.heartbeatTicker = time.NewTicker(time.Duration(constant.HEARTBEAT_INTERVAL) * time.Millisecond)
+}
+
+func (r *RaftNode) stopHeartbeatTicker() {
+    if r.heartbeatTicker != nil {
+        r.heartbeatTicker.Stop()
+        r.heartbeatTicker = nil
+    }
+}
+
+func (r *RaftNode) resetHeartbeatTicker() {
+    r.stopHeartbeatTicker()
+    r.createHeartbeatTicker()
 }
 
 func (r *RaftNode) sendHeartbeat() {
