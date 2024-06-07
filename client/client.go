@@ -13,7 +13,7 @@ type Client struct {
 }
 
 func NewClient(address string) (*Client, error) {
-	client, err := rpc.Dial("tcp", address)
+	client, err := rpc.DialHTTP("tcp", address)
 	if err != nil {
 		return nil, err
 	}
@@ -26,12 +26,11 @@ func NewClient(address string) (*Client, error) {
 func (c *Client) Execute(command, key, value string) string {
 	args := &server.CommandArgs{Command: command, Key: key, Value: value}
 	var reply server.CommandReply
-	err := c.rpcClient.Call("Server.Apply", args, &reply)
-	if err != nil {
-		// if reply.LeaderAddress != "" {
+	err := c.rpcClient.Call("Server.Execute", args, &reply)
+	if reply.LeaderAddress != "" {
 		log.Printf("Redirecting to leader at %s", reply.LeaderAddress)
 		c.serverAddress = reply.LeaderAddress
-		c.rpcClient, err = rpc.Dial("tcp", c.serverAddress)
+		c.rpcClient, err = rpc.DialHTTP("tcp", c.serverAddress)
 		if err != nil {
 			log.Fatalf("Failed to connect to new leader: %v", err)
 		}
@@ -39,10 +38,8 @@ func (c *Client) Execute(command, key, value string) string {
 		if err != nil {
 			log.Fatalf("Execute error after redirection: %v", err)
 		}
-		// } else {
-		//     log.Fatalf("Execute error: %v", err)
-		// }
 	}
+
 	return reply.Result
 }
 
