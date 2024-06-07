@@ -82,6 +82,7 @@ func (r *RaftNode) ReceiveAppendEntries(args *ReceiveAppendEntriesArgs, reply *R
 		if index < args.LeaderCommit {
 			commitIdx = index
 		}
+		r.commitLog(commitIdx)
 		r.setCommitIndex(commitIdx)
 	}
 

@@ -411,8 +411,12 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration) {
 }
 
 func (r *RaftNode) commitLog(newCommitIndex uint64) {
+	currentCommitIdx := r.getCommitIndex()
+	if newCommitIndex <= currentCommitIdx {
+		return
+	}
 	logs, _ := r.logs.GetLogs()
-	for i := r.getCommitIndex(); i <= newCommitIndex; i++ {
+	for i := currentCommitIdx; i <= newCommitIndex; i++ {
 		r.fsm.Apply(&logs[i])
 	}
 }
