@@ -37,10 +37,6 @@ func (r *RaftNode) ReceiveAppendEntries(args *ReceiveAppendEntriesArgs, reply *R
 		logger.Log.Info(fmt.Sprintf("Node %d receiving heartbeat at: %s", r.Config.ID, time.Now()))
 	}
 
-	if len(args.Entries) == 0 {
-		return nil
-	}
-
 	if args.Term < r.currentTerm {
 		logger.Log.Warn(
 			fmt.Sprintf(
@@ -53,11 +49,11 @@ func (r *RaftNode) ReceiveAppendEntries(args *ReceiveAppendEntriesArgs, reply *R
 
 	// Need to check if index from array logs and their index synchronized
 	logs, _ := r.logs.GetLogs()
-	if uint64(len(logs)) > args.PrevLogIndex {
+	if uint64(len(logs)) > args.PrevLogIndex && len(logs) > 0 {
 		if logs[args.PrevLogIndex].Term != args.PrevLogTerm {
 			logs = logs[:args.PrevLogIndex]
 		}
-	} else {
+	} else if len(logs) > 0 {
 		logger.Log.Warn(
 			fmt.Sprintf(
 				"Failed to receive append entries in node: %d because log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm",
@@ -72,7 +68,11 @@ func (r *RaftNode) ReceiveAppendEntries(args *ReceiveAppendEntriesArgs, reply *R
 		logs = append(logs, entry)
 	}
 
-	lastLog := logs[len(logs)-1]
+	var lastLog Log
+	if len(logs) > 0 {
+		lastLog = logs[len(logs)-1]
+	}
+
 	r.setLastLog(lastLog.Index, lastLog.Term)
 	r.logs.StoreLogs(logs)
 

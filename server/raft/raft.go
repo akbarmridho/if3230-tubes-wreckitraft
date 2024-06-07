@@ -362,50 +362,55 @@ func (r *RaftNode) appendLog(data []byte) bool {
 }
 
 func (r *RaftNode) appendEntries(peer NodeConfiguration) {
-	index, term := r.getLastLog()
+	logs, _ := r.logs.GetLogs()
+
 	appendEntry := ReceiveAppendEntriesArgs{
 		Term:         r.getCurrentTerm(),
 		LeaderConfig: r.Config,
-		PrevLogIndex: index,
-		PrevLogTerm:  term,
 		Entries:      nil,
 		LeaderCommit: r.getCommitIndex(),
 	}
 
 	nextIndex := r.getNextIndex()
 	matchIndex := r.getMatchIndex()
-	index, ok := nextIndex[peer.Address]
-
-	if !ok {
-		index = 0
-	}
 
 	var resp ReceiveAppendEntriesResponse
-	if r.lastLogIndex >= index {
-		logs, _ := r.logs.GetLogs()
-		for {
-			index, ok = nextIndex[peer.Address]
-			if !ok {
-				index = 0
-			}
-
-			appendEntry.Entries = logs[index:]
-			r.sendAppendEntries(appendEntry, &resp, peer)
-
-			// Need to check function of resp.term
-			if resp.Success {
-				logger.Log.Info("Success send append entries to %s", peer.ID)
-				nextIndex[peer.Address]++
-				r.setNextIndex(nextIndex)
-				matchIndex[peer.Address]++
-				r.setMatchIndex(matchIndex)
-				break
-			} else {
-				nextIndex[peer.Address]--
-			}
+	for {
+		index, ok := nextIndex[peer.Address]
+		prevLogIndex := uint64(0)
+		if !ok {
+			index = 0
+		} else {
+			prevLogIndex = index - 1
 		}
-	} else {
-		r.sendAppendEntries(appendEntry, &resp, peer)
+
+		appendEntry.PrevLogIndex = prevLogIndex
+		appendEntry.PrevLogTerm = 0
+		if len(logs) > 0 {
+			appendEntry.PrevLogTerm = logs[prevLogIndex].Term
+		}
+
+		if r.lastLogIndex >= index && len(logs) > 0 {
+			appendEntry.Entries = logs[index:]
+		}
+		err := r.sendAppendEntries(appendEntry, &resp, peer)
+
+		if err != nil {
+			continue
+		}
+
+		// TODO: handle resp.term
+		if resp.Success {
+			logger.Log.Info(fmt.Sprintf("Success send append entries to %d", peer.ID))
+			nextIndex[peer.Address]++
+			r.setNextIndex(nextIndex)
+			matchIndex[peer.Address]++
+			r.setMatchIndex(matchIndex)
+			break
+		} else {
+			logger.Log.Info(fmt.Sprintf("Failed send append entries to %d", peer.ID))
+			nextIndex[peer.Address]--
+		}
 	}
 
 }
