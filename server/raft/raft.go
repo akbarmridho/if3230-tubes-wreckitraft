@@ -240,34 +240,34 @@ func (r *RaftNode) startElection() <-chan *RequestVoteResponse {
 }
 
 func (r *RaftNode) runLeader() {
-    r.sendHeartbeat()
-    r.createHeartbeatTicker()
-    defer r.stopHeartbeatTicker()
+	r.sendHeartbeat()
+	r.createHeartbeatTicker()
+	defer r.stopHeartbeatTicker()
 
-    for r.getState() == LEADER {
-        select {
-        case <-r.heartbeatTicker.C:
-            r.sendHeartbeat()
-        }
-    }
+	for r.getState() == LEADER {
+		select {
+		case <-r.heartbeatTicker.C:
+			r.sendHeartbeat()
+		}
+	}
 
-    logger.Log.Info(fmt.Sprintf("%s:%d is no longer the leader", r.Config.host, r.Config.Address.Port))
+	logger.Log.Info(fmt.Sprintf("%s:%d is no longer the leader", r.Config.GetHost(), r.Config.Address.Port))
 }
 
 func (r *RaftNode) createHeartbeatTicker() {
-    r.heartbeatTicker = time.NewTicker(time.Duration(constant.HEARTBEAT_INTERVAL) * time.Millisecond)
+	r.heartbeatTicker = time.NewTicker(time.Duration(constant.HEARTBEAT_INTERVAL) * time.Millisecond)
 }
 
 func (r *RaftNode) stopHeartbeatTicker() {
-    if r.heartbeatTicker != nil {
-        r.heartbeatTicker.Stop()
-        r.heartbeatTicker = nil
-    }
+	if r.heartbeatTicker != nil {
+		r.heartbeatTicker.Stop()
+		r.heartbeatTicker = nil
+	}
 }
 
 func (r *RaftNode) resetHeartbeatTicker() {
-    r.stopHeartbeatTicker()
-    r.createHeartbeatTicker()
+	r.stopHeartbeatTicker()
+	r.createHeartbeatTicker()
 }
 
 func (r *RaftNode) sendHeartbeat() {
