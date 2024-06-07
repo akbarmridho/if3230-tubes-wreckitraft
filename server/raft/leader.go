@@ -3,6 +3,7 @@ package raft
 import (
 	"fmt"
 	"if3230-tubes-wreckitraft/shared/logger"
+	"sort"
 	"time"
 )
 
@@ -25,4 +26,33 @@ func (r *RaftNode) sendAppendEntries(
 	}
 
 	return nil
+}
+
+func (r *RaftNode) replicateLog() {
+	// TODO: Call reset heartbeat ticker here
+
+	for _, peer := range r.clusters {
+		if peer.ID == r.Config.ID {
+			continue
+		}
+
+		// Log replication to followers
+		logger.Log.Info(fmt.Sprintf("Leader is replicating log to node %d", peer.ID))
+		go r.appendEntries(peer)
+	}
+
+	var matchIndices []uint64
+	for _, index := range r.matchIndex {
+		matchIndices = append(matchIndices, index)
+	}
+	sort.Slice(matchIndices, func(i, j int) bool { return matchIndices[i] < matchIndices[j] })
+
+	majorityIndex := matchIndices[(len(matchIndices)-1)/2]
+
+	logs, _ := r.logs.GetLogs()
+	if majorityIndex > r.commitIndex && logs[majorityIndex].Term == r.currentTerm {
+		r.commitLog(majorityIndex)
+		r.commitIndex = majorityIndex
+	}
+
 }

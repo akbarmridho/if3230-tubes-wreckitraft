@@ -415,6 +415,13 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration) {
 
 }
 
+func (r *RaftNode) commitLog(newCommitIndex uint64) {
+	logs, _ := r.logs.GetLogs()
+	for i := r.getCommitIndex(); i <= newCommitIndex; i++ {
+		r.fsm.Apply(&logs[i])
+	}
+}
+
 // Apply is used to apply a command to the FSM in a highly consistent
 // manner. This returns a future that can be used to wait on the application.
 // An optional timeout can be provided to limit the amount of time we wait
