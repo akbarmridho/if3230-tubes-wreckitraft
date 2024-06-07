@@ -467,3 +467,24 @@ type LogArgs struct{}
 type LogReply struct {
 	Log []string
 }
+
+func (r *RaftNode) IsLeader() bool {
+	r.clusterLeaderLock.RLock()
+	defer r.clusterLeaderLock.RUnlock()
+	return r.clusterLeader != nil && r.clusterLeader.ID == r.Config.ID
+}
+
+func (r *RaftNode) IsCandidate() bool {
+	r.clusterLeaderLock.RLock()
+	defer r.clusterLeaderLock.RUnlock()
+	return r.raftState.state == CANDIDATE
+}
+
+func (r *RaftNode) GetLeaderAddress() string {
+	r.clusterLeaderLock.RLock()
+	defer r.clusterLeaderLock.RUnlock()
+	if r.clusterLeader != nil {
+		return fmt.Sprintf("%s:%d", r.clusterLeader.Address.IP, r.clusterLeader.Address.Port)
+	}
+	return ""
+}
