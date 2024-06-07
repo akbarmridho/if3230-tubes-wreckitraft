@@ -336,10 +336,10 @@ func (r *RaftNode) ReceiveRequestVote(args *RequestVoteArgs, reply *RequestVoteR
 	return nil
 }
 
-func (r *RaftNode) appendLog(data []byte) bool {
+func (r *RaftNode) appendLog(data []byte) error {
 	logs, err := r.logs.GetLogs()
 	if err != nil {
-		return false
+		return err
 	}
 
 	index, term := r.getLastLog()
@@ -354,11 +354,11 @@ func (r *RaftNode) appendLog(data []byte) bool {
 	logs = append(logs, newLog)
 	err = r.logs.StoreLogs(logs)
 	if err != nil {
-		return false
+		return err
 	}
 
 	r.setLastLog(index, term)
-	return true
+	return nil
 }
 
 func (r *RaftNode) appendEntries(peer NodeConfiguration) {
@@ -438,8 +438,11 @@ func (r *RaftNode) commitLog(newCommitIndex uint64) {
 // ErrAbortedByRestore is returned. In this case the write effectively failed
 // since its effects will not be present in the FSM after the restore.
 func (r *RaftNode) Apply(payload []byte) error {
-
-	// todo implement this
+	err := r.appendLog(payload)
+	if err != nil {
+		return err
+	}
+	r.replicateLog()
 	return nil
 }
 
