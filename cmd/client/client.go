@@ -2,42 +2,16 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"if3230-tubes-wreckitraft/client"
 	"log"
-	"math/rand"
-	"net/http"
 	"os"
 	"strings"
-	"time"
 )
 
-func getServers() []string {
-	resp, err := http.Get("http://localhost:8080/servers")
-	if err != nil {
-		log.Fatalf("Failed to get servers: %v", err)
-	}
-	defer resp.Body.Close()
-
-	var servers []string
-	if err := json.NewDecoder(resp.Body).Decode(&servers); err != nil {
-		log.Fatalf("Failed to decode servers: %v", err)
-	}
-	return servers
-}
-
 func main() {
-	servers := getServers()
-
-	// Seed the random number generator
-	rand.Seed(time.Now().UnixNano())
-
-	// Select a random server
-	selectedServer := servers[rand.Intn(len(servers))]
-
 	// Connect to the selected server
-	cli, err := client.NewClient(selectedServer)
+	cli, err := client.NewClient("localhost:5001")
 	if err != nil {
 		log.Fatalf("Failed to connect to server: %v", err)
 	}
@@ -45,6 +19,7 @@ func main() {
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Println("Distributed Key-Value Store Client")
 	fmt.Println("---------------------")
+
 
 	for {
 		fmt.Print("> ")

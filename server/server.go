@@ -65,7 +65,6 @@ func (s *Server) Apply(log *raft.Log) interface{} {
 	default:
 		panic(fmt.Sprintf("unrecognized command op: %s", c.Command))
 	}
-	return nil
 }
 
 func (s *Server) Start() error {
@@ -82,9 +81,10 @@ func (s *Server) Start() error {
 	}
 
 	rpc.HandleHTTP()
-	port := fmt.Sprintf(":%d", s.raftNode.Config.Address.Port)
+	address := fmt.Sprintf("%s:%d", s.raftNode.Config.Address.IP, s.raftNode.Config.Address.Port)
+	logger.Log.Info(fmt.Sprintf("Server is running on %s", address))
 	// Network Listener
-	listener, err := net.Listen("tcp", port)
+	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		return err
 	}
@@ -93,6 +93,7 @@ func (s *Server) Start() error {
 
 	return nil
 }
+
 
 func (s *Server) Set(key, value string) error {
 	s.storageLock.Lock()
@@ -151,15 +152,42 @@ func (s *Server) ApplyAppend(key, value string) error {
 }
 
 func (s *Server) Execute(args *CommandArgs, reply *CommandReply) error {
-	//TODO Check Leader
+	logger.Log.Info(fmt.Sprintf("Received command: %s", args.Command))
+	if s.raftNode.IsCandidate(){
+		reply.Result = "[FAIL] failed to execute command, node is candidate"
+		return nil
+	}
+
+	reply.LeaderAddress =""
+
+	if !s.raftNode.IsLeader() {
+		reply.LeaderAddress = s.raftNode.GetLeaderAddress()
+		reply.Result = "[FAIL] Node is not the leader"
+		return nil
+	}
+
 	switch args.Command {
 	case "set":
+		// b, err := json.Marshal(args)
+		// fmt.Println(b)
+		// if err != nil {
+		// 	logger.Log.Error(fmt.Sprintf("Failed to marshal command: %s", err.Error()))
+		// 	return err
+		// }
+		// return s.raftNode.Apply(b)
 		b, err := json.Marshal(args)
-
 		if err != nil {
+			logger.Log.Error(fmt.Sprintf("Failed to marshal command: %s", err.Error()))
 			return err
 		}
-		return s.raftNode.Apply(b)
+		logger.Log.Info(fmt.Sprintf("Applying set command to Raft: %s", string(b)))
+		err = s.raftNode.Apply(b)
+		if err != nil {
+			logger.Log.Error(fmt.Sprintf("Failed to apply set command: %s", err.Error()))
+			return err
+		}
+		reply.Result = "[SUCCESS] Key-Value set"
+		
 	case "get":
 		value, err := s.Get(args.Key)
 		if err != nil {
