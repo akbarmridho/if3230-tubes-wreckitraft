@@ -350,7 +350,7 @@ func (r *RaftNode) ReceiveRequestVote(args *RequestVoteArgs, reply *RequestVoteR
 
 func (r *RaftNode) appendLog(data []byte) error {
 	logs, err := r.logs.GetLogs()
-	if err != nil {
+	if err != nil && !errors.Is(err, ErrLogNotFound) {
 		return err
 	}
 
