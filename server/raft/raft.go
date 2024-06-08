@@ -60,9 +60,9 @@ func NewRaftNode(address shared.Address, fsm FSM, localID uint64) (*RaftNode, er
 	}
 
 	var lastLog Log
-	if len(logs) > 1 {
-		lastIndex := len(logs) - 1
-		lastLog = logs[lastIndex]
+	if len(logs) > 0 {
+		lastIndex := len(logs)
+		lastLog = logs[lastIndex-1]
 	}
 
 	// hardcode clusters. TODO delete
@@ -126,7 +126,7 @@ func NewRaftNode(address shared.Address, fsm FSM, localID uint64) (*RaftNode, er
 }
 
 func (r *RaftNode) setHeartbeatTimeout() {
-	minDuration := constant.HEARTBEAT_INTERVAL * time.Millisecond
+	minDuration := 1.5 * constant.HEARTBEAT_INTERVAL * time.Millisecond
 	maxDuration := 2 * constant.HEARTBEAT_INTERVAL * time.Millisecond
 
 	r.heartbeatTimeout = util.RandomTimeout(minDuration, maxDuration)
@@ -354,8 +354,9 @@ func (r *RaftNode) appendLog(data []byte) error {
 		return err
 	}
 
-	index, term := r.getLastLog()
-	index += 1
+	index := uint64(len(logs) + 1)
+	term := r.getCurrentTerm()
+
 	newLog := Log{
 		Index: index,
 		Term:  term,
@@ -392,18 +393,19 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration) {
 		prevLogIndex := uint64(0)
 		if !ok {
 			index = 0
-		} else {
+		}
+		if index > 0 {
 			prevLogIndex = index - 1
 		}
 
 		appendEntry.PrevLogIndex = prevLogIndex
 		appendEntry.PrevLogTerm = 0
-		if len(logs) > 0 {
-			appendEntry.PrevLogTerm = logs[prevLogIndex].Term
+		if prevLogIndex > 0 {
+			appendEntry.PrevLogTerm = logs[prevLogIndex-1].Term
 		}
 
-		if r.lastLogIndex >= index && len(logs) > 0 {
-			appendEntry.Entries = logs[index:]
+		if r.lastLogIndex >= index {
+			appendEntry.Entries = logs[index-1:]
 		}
 		err := r.sendAppendEntries(appendEntry, &resp, peer)
 
@@ -414,10 +416,12 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration) {
 		// TODO: handle resp.term
 		if resp.Success {
 			logger.Log.Info(fmt.Sprintf("Success send append entries to %d", peer.ID))
-			nextIndex[peer.Address]++
-			r.setNextIndex(nextIndex)
-			matchIndex[peer.Address]++
-			r.setMatchIndex(matchIndex)
+			if len(appendEntry.Entries) > 0 {
+				nextIndex[peer.Address]++
+				r.setNextIndex(nextIndex)
+				matchIndex[peer.Address]++
+				r.setMatchIndex(matchIndex)
+			}
 			break
 		} else {
 			logger.Log.Info(fmt.Sprintf("Failed send append entries to %d", peer.ID))
@@ -434,7 +438,11 @@ func (r *RaftNode) commitLog(newCommitIndex uint64) {
 	}
 	logs, _ := r.logs.GetLogs()
 	for i := currentCommitIdx; i <= newCommitIndex; i++ {
-		r.fsm.Apply(&logs[i])
+		if i == 0 {
+			continue
+		}
+		logger.Log.Info(fmt.Sprintf("From node:%d applying log to fsm with index %d", r.Config.ID, i))
+		r.fsm.Apply(&logs[i-1])
 	}
 }
 
