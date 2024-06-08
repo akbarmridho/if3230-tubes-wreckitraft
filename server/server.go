@@ -59,7 +59,7 @@ func (s *Server) Apply(log *raft.Log) interface{} {
 	switch c.Command {
 	case "set":
 		return s.ApplySet(c.Key, c.Value)
-	case "delete":
+	case "del":
 		return s.ApplyDel(c.Key)
 	case "append":
 		return s.ApplyAppend(c.Key, c.Value)
@@ -166,27 +166,19 @@ func (s *Server) Execute(args *CommandArgs, reply *CommandReply) error {
 		return nil
 	}
 
+	var err error
+
 	switch args.Command {
 	case "set":
-		// b, err := json.Marshal(args)
-		// fmt.Println(b)
-		// if err != nil {
-		// 	logger.Log.Error(fmt.Sprintf("Failed to marshal command: %s", err.Error()))
-		// 	return err
-		// }
-		// return s.raftNode.Apply(b)
 		b, err := json.Marshal(args)
 		if err != nil {
 			logger.Log.Error(fmt.Sprintf("Failed to marshal command: %s", err.Error()))
 			return err
 		}
-		logger.Log.Info(fmt.Sprintf("Applying set command to Raft: %s", string(b)))
 		err = s.raftNode.Apply(b)
-		if err != nil {
-			logger.Log.Error(fmt.Sprintf("Failed to apply set command: %s", err.Error()))
-			return err
+		if err == nil {
+			reply.Result = fmt.Sprintf("[OK] Set %s-%s successful", args.Key, args.Value)
 		}
-		reply.Result = "[SUCCESS] Key-Value set"
 
 	case "get":
 		value, err := s.Get(args.Key)
@@ -194,30 +186,45 @@ func (s *Server) Execute(args *CommandArgs, reply *CommandReply) error {
 			return err
 		}
 		reply.Result = value
+
 	case "del":
 		b, err := json.Marshal(args)
-
 		if err != nil {
 			return err
 		}
-		return s.raftNode.Apply(b)
+		err = s.raftNode.Apply(b)
+		if err == nil {
+			reply.Result = fmt.Sprintf("[OK] Delete %s successful", args.Key)
+		}
+
 	case "append":
 		b, err := json.Marshal(args)
-
 		if err != nil {
 			return err
 		}
-		return s.raftNode.Apply(b)
+		err = s.raftNode.Apply(b)
+		if err == nil {
+			reply.Result = fmt.Sprintf("[OK] Append %s with %s successful", args.Key, args.Value)
+		}
+
 	case "strln":
 		value, err := s.Strln(args.Key)
 		if err != nil {
 			return err
 		}
 		reply.Result = value
+
 	case "ping":
 		reply.Result = "pong"
+
 	default:
 		return errors.New("unknown command")
 	}
+
+	if err != nil {
+		logger.Log.Error(fmt.Sprintf("Failed to apply command: %s", err.Error()))
+		return err
+	}
+
 	return nil
 }

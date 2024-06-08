@@ -1,6 +1,7 @@
 package client
 
 import (
+	"fmt"
 	"if3230-tubes-wreckitraft/server"
 	"if3230-tubes-wreckitraft/server/raft"
 	"log"
@@ -28,6 +29,7 @@ func (c *Client) Execute(command, key, value string) string {
 	var reply server.CommandReply
 	err := c.rpcClient.Call("Server.Execute", args, &reply)
 	if reply.LeaderAddress != "" {
+		fmt.Println(reply.Result)
 		log.Printf("Redirecting to leader at %s", reply.LeaderAddress)
 		c.serverAddress = reply.LeaderAddress
 		c.rpcClient, err = rpc.DialHTTP("tcp", c.serverAddress)
