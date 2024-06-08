@@ -35,7 +35,9 @@ func (r *RaftNode) replicateLog() {
 
 	var wg sync.WaitGroup
 
-	for _, peer := range r.clusters {
+	r.clustersLock.RLock()
+
+	for _, peer := range r.clusters.Servers {
 		if peer.ID == r.Config.ID {
 			continue
 		}
@@ -48,6 +50,8 @@ func (r *RaftNode) replicateLog() {
 			r.appendEntries(peer, true)
 		}(peer)
 	}
+
+	r.clustersLock.RUnlock()
 
 	wg.Wait()
 

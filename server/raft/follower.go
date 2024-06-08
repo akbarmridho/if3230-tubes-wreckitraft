@@ -76,6 +76,20 @@ func (r *RaftNode) ReceiveAppendEntries(args *ReceiveAppendEntriesArgs, reply *R
 	r.setLastLog(lastLog.Index, lastLog.Term)
 	r.logs.StoreLogs(logs)
 
+	for _, entry := range logs {
+		if entry.Type == CONFIGURATION {
+			r.commitLatestConfiguration()
+			decodedConfig, err := DecodeConfiguration(entry.Data)
+
+			if err != nil {
+				logger.Log.Error(fmt.Sprintf("Failed to decode configuration %s", err.Error()))
+				continue
+			}
+
+			r.setLatestConfiguration(*decodedConfig, entry.Index)
+		}
+	}
+
 	if args.LeaderCommit > r.getCommitIndex() {
 		index, _ := r.getLastLog()
 		commitIdx := args.LeaderCommit
@@ -84,6 +98,10 @@ func (r *RaftNode) ReceiveAppendEntries(args *ReceiveAppendEntriesArgs, reply *R
 		}
 		r.commitLog(commitIdx)
 		r.setCommitIndex(commitIdx)
+
+		if r.configurations.latestIndex <= index {
+			r.commitLatestConfiguration()
+		}
 	}
 
 	reply.Success = true

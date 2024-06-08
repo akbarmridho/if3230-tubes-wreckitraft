@@ -13,9 +13,14 @@ import (
 
 type RaftNode struct {
 	raftState
+
+	// Track the latest configuration and latest commited configuration
+	configurations Configurations
+
 	Config NodeConfiguration
 
-	clusters          []NodeConfiguration
+	clusters          Configuration
+	clustersLock      sync.RWMutex
 	clusterLeader     *NodeConfiguration
 	clusterLeaderLock sync.RWMutex
 
@@ -105,11 +110,17 @@ func NewRaftNode(address shared.Address, fsm FSM, localID uint64) (*RaftNode, er
 	}
 
 	node := RaftNode{
-		Config:          self,
-		fsm:             fsm,
-		logs:            store,
-		stable:          store,
-		clusters:        clusters,
+		Config:   self,
+		fsm:      fsm,
+		logs:     store,
+		stable:   store,
+		clusters: Configuration{Servers: clusters},
+		configurations: Configurations{
+			latestIndex:   0,
+			commitedIndex: 0,
+			commited:      Configuration{Servers: clusters},
+			latest:        Configuration{Servers: clusters},
+		},
 		electionTimeout: time.Millisecond * 500,
 	}
 	node.setCurrentTerm(*currentTerm)
@@ -175,7 +186,12 @@ func (r *RaftNode) runCandidate() {
 		constant.ELECTION_TIMEOUT_MIN*time.Millisecond, constant.ELECTION_TIMEOUT_MAX*time.Millisecond,
 	)
 	electionTimer := r.getTimeout(r.electionTimeout)
-	majorityThreshold := (len(r.clusters) / 2) + 1
+
+	r.clustersLock.RLock()
+	voterCount := r.clusters.VoterCount()
+	r.clustersLock.RUnlock()
+
+	majorityThreshold := (voterCount / 2) + 1
 	votesReceived := 0
 	for r.getState() == CANDIDATE {
 		select {
@@ -203,7 +219,10 @@ func (r *RaftNode) runCandidate() {
 }
 
 func (r *RaftNode) startElection() <-chan *RequestVoteResponse {
-	votesChannel := make(chan *RequestVoteResponse, len(r.clusters))
+	r.clustersLock.RLock()
+	voterCount := r.clusters.VoterCount()
+	r.clustersLock.RUnlock()
+	votesChannel := make(chan *RequestVoteResponse, voterCount)
 	r.setCurrentTerm(r.getCurrentTerm() + 1)
 
 	lastLogIndex, lastTerm := r.getLastLog()
@@ -224,7 +243,13 @@ func (r *RaftNode) startElection() <-chan *RequestVoteResponse {
 		)
 	}
 
-	for _, peer := range r.clusters {
+	r.clustersLock.RLock()
+
+	for _, peer := range r.clusters.Servers {
+		if peer.Status == Nonvoter {
+			continue
+		}
+
 		if peer.ID == r.Config.ID {
 			votesChannel <- &RequestVoteResponse{
 				Term:    req.Term,
@@ -235,6 +260,8 @@ func (r *RaftNode) startElection() <-chan *RequestVoteResponse {
 			requestVoteFromPeer(peer)
 		}
 	}
+
+	r.clustersLock.RUnlock()
 
 	return votesChannel
 }
@@ -273,7 +300,9 @@ func (r *RaftNode) resetHeartbeatTicker() {
 func (r *RaftNode) sendHeartbeat() {
 	logger.Log.Info(fmt.Sprintf("Sending heartbeat at: %s", time.Now()))
 
-	for _, peer := range r.clusters {
+	r.clustersLock.RLock()
+
+	for _, peer := range r.clusters.Servers {
 		if peer.ID == r.Config.ID {
 			continue
 		}
@@ -283,6 +312,8 @@ func (r *RaftNode) sendHeartbeat() {
 
 		go r.appendEntries(peer, false)
 	}
+
+	r.clustersLock.RUnlock()
 }
 
 func (r *RaftNode) getTimeout(timeout time.Duration) <-chan time.Time {
@@ -348,7 +379,7 @@ func (r *RaftNode) ReceiveRequestVote(args *RequestVoteArgs, reply *RequestVoteR
 	return nil
 }
 
-func (r *RaftNode) appendLog(data []byte) error {
+func (r *RaftNode) appendLog(request LogRequest) error {
 	logs, err := r.logs.GetLogs()
 	if err != nil && !errors.Is(err, ErrLogNotFound) {
 		return err
@@ -360,8 +391,8 @@ func (r *RaftNode) appendLog(data []byte) error {
 	newLog := Log{
 		Index: index,
 		Term:  term,
-		Type:  COMMAND,
-		Data:  data,
+		Type:  request.Type,
+		Data:  request.Data,
 	}
 
 	logs = append(logs, newLog)
@@ -444,7 +475,14 @@ func (r *RaftNode) commitLog(newCommitIndex uint64) {
 			continue
 		}
 		logger.Log.Info(fmt.Sprintf("From node:%d applying log to fsm with index %d", r.Config.ID, i))
-		r.fsm.Apply(&logs[i-1])
+
+		log := logs[i-1]
+
+		if log.Type == COMMAND {
+			r.fsm.Apply(&log)
+		} else if log.Type == CONFIGURATION {
+			//
+		}
 	}
 }
 
@@ -464,7 +502,10 @@ func (r *RaftNode) commitLog(newCommitIndex uint64) {
 // ErrAbortedByRestore is returned. In this case the write effectively failed
 // since its effects will not be present in the FSM after the restore.
 func (r *RaftNode) Apply(payload []byte) error {
-	err := r.appendLog(payload)
+	err := r.appendLog(LogRequest{
+		Type: COMMAND,
+		Data: payload,
+	})
 	if err != nil {
 		return err
 	}

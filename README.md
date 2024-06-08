@@ -26,20 +26,14 @@ go build cmd/client/client.go
 go build cmd/server/server.go
 ```
 
-6. Run server registry
-```
-go run cmd/registry/registry.go
-```
-
-7. Run Multiple server
+6. Run Multiple server
 
 ```
 ./server --id=0 --host=localhost --port=5000
 ./server --id=1 --host=localhost --port=5001
 ./server --id=2 --host=localhost --port=5002
 ```
-
-8. Run the server and client in different terminal
+7. Run the server and client in different terminal
 ```
 ./client
 ```

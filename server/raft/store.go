@@ -35,7 +35,7 @@ func (s Store) GetLogs() ([]Log, error) {
 		return nil, err
 	}
 
-	return logs, ErrLogNotFound
+	return logs, nil
 }
 
 func (s Store) StoreLogs(logs []Log) error {
