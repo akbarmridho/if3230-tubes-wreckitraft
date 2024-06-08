@@ -439,7 +439,7 @@ func (r *RaftNode) commitLog(newCommitIndex uint64) {
 		return
 	}
 	logs, _ := r.logs.GetLogs()
-	for i := currentCommitIdx; i <= newCommitIndex; i++ {
+	for i := currentCommitIdx + 1; i <= newCommitIndex; i++ {
 		if i == 0 {
 			continue
 		}
