@@ -281,7 +281,7 @@ func (r *RaftNode) sendHeartbeat() {
 		// Send heartbeat
 		logger.Log.Info(fmt.Sprintf("Leader is sending heartbeat to %s:%d", peer.Address.IP, peer.Address.Port))
 
-		go r.appendEntries(peer)
+		go r.appendEntries(peer, false)
 	}
 }
 
@@ -374,7 +374,7 @@ func (r *RaftNode) appendLog(data []byte) error {
 	return nil
 }
 
-func (r *RaftNode) appendEntries(peer NodeConfiguration) {
+func (r *RaftNode) appendEntries(peer NodeConfiguration, isHeartbeat bool) {
 	logs, _ := r.logs.GetLogs()
 
 	appendEntry := ReceiveAppendEntriesArgs{
@@ -418,7 +418,7 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration) {
 		// TODO: handle resp.term
 		if resp.Success {
 			logger.Log.Info(fmt.Sprintf("Success send append entries to %d", peer.ID))
-			if len(appendEntry.Entries) > 0 {
+			if len(appendEntry.Entries) > 0 && !isHeartbeat {
 				nextIndex[peer.Address]++
 				r.setNextIndex(nextIndex)
 				matchIndex[peer.Address]++
