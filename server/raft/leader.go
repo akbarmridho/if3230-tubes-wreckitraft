@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"if3230-tubes-wreckitraft/shared/logger"
 	"sort"
+	"sync"
 	"time"
 )
 
@@ -32,6 +33,8 @@ func (r *RaftNode) replicateLog() {
 	// Reset heartbeat ticker
 	r.resetHeartbeatTicker()
 
+	var wg sync.WaitGroup
+
 	for _, peer := range r.clusters {
 		if peer.ID == r.Config.ID {
 			continue
@@ -39,11 +42,18 @@ func (r *RaftNode) replicateLog() {
 
 		// Log replication to followers
 		logger.Log.Info(fmt.Sprintf("Leader is replicating log to node %d", peer.ID))
-		go r.appendEntries(peer)
+		wg.Add(1)
+		go func(peer NodeConfiguration) {
+			defer wg.Done()
+			r.appendEntries(peer)
+		}(peer)
 	}
 
+	wg.Wait()
+	r.sendHeartbeat()
+
 	var matchIndices []uint64
-	for _, index := range r.matchIndex {
+	for _, index := range r.getMatchIndex() {
 		matchIndices = append(matchIndices, index)
 	}
 	sort.Slice(matchIndices, func(i, j int) bool { return matchIndices[i] < matchIndices[j] })
@@ -51,9 +61,10 @@ func (r *RaftNode) replicateLog() {
 	majorityIndex := matchIndices[(len(matchIndices)-1)/2]
 
 	logs, _ := r.logs.GetLogs()
-	if majorityIndex > r.getCommitIndex() && logs[majorityIndex].Term == r.currentTerm {
+
+	if majorityIndex > r.getCommitIndex() && logs[majorityIndex-1].Term == r.currentTerm {
 		r.commitLog(majorityIndex)
 		r.setCommitIndex(majorityIndex)
 	}
-
+	r.sendHeartbeat()
 }
