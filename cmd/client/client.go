@@ -3,15 +3,25 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"github.com/alexflint/go-arg"
 	"if3230-tubes-wreckitraft/client"
 	"log"
 	"os"
 	"strings"
 )
 
+var args struct {
+	Host string `default:"localhost:5000" help:"host of the node. Example: localhost:5001"`
+}
+
 func main() {
+	// Parse arg
+
+	arg.MustParse(&args)
+
 	// Connect to the selected server
-	cli, err := client.NewClient("localhost:5001")
+	log.Printf("got host %s", args.Host)
+	cli, err := client.NewClient(args.Host)
 	if err != nil {
 		log.Fatalf("Failed to connect to server: %v", err)
 	}
@@ -19,7 +29,6 @@ func main() {
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Println("Distributed Key-Value Store Client")
 	fmt.Println("---------------------")
-
 
 	for {
 		fmt.Print("> ")
