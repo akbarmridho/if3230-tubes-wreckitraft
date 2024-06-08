@@ -404,7 +404,9 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration) {
 			appendEntry.PrevLogTerm = logs[prevLogIndex-1].Term
 		}
 
-		if r.lastLogIndex >= index {
+		lastLogIndex, _ := r.getLastLog()
+
+		if lastLogIndex >= index {
 			appendEntry.Entries = logs[index-1:]
 		}
 		err := r.sendAppendEntries(appendEntry, &resp, peer)

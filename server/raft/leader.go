@@ -31,7 +31,7 @@ func (r *RaftNode) sendAppendEntries(
 
 func (r *RaftNode) replicateLog() {
 	// Reset heartbeat ticker
-	r.resetHeartbeatTicker()
+	//r.resetHeartbeatTicker()
 
 	var wg sync.WaitGroup
 
@@ -50,7 +50,6 @@ func (r *RaftNode) replicateLog() {
 	}
 
 	wg.Wait()
-	r.sendHeartbeat()
 
 	var matchIndices []uint64
 	for _, index := range r.getMatchIndex() {
@@ -66,5 +65,4 @@ func (r *RaftNode) replicateLog() {
 		r.commitLog(majorityIndex)
 		r.setCommitIndex(majorityIndex)
 	}
-	r.sendHeartbeat()
 }
