@@ -45,6 +45,7 @@ func NewServer(ID uint64, address shared.Address) (*Server, error) {
 	}
 
 	server.raftNode = raftNode
+	server.storage = make(map[string]string)
 
 	return &server, nil
 }
@@ -93,7 +94,6 @@ func (s *Server) Start() error {
 
 	return nil
 }
-
 
 func (s *Server) Set(key, value string) error {
 	s.storageLock.Lock()
@@ -153,12 +153,12 @@ func (s *Server) ApplyAppend(key, value string) error {
 
 func (s *Server) Execute(args *CommandArgs, reply *CommandReply) error {
 	logger.Log.Info(fmt.Sprintf("Received command: %s", args.Command))
-	if s.raftNode.IsCandidate(){
+	if s.raftNode.IsCandidate() {
 		reply.Result = "[FAIL] failed to execute command, node is candidate"
 		return nil
 	}
 
-	reply.LeaderAddress =""
+	reply.LeaderAddress = ""
 
 	if !s.raftNode.IsLeader() {
 		reply.LeaderAddress = s.raftNode.GetLeaderAddress()
@@ -187,7 +187,7 @@ func (s *Server) Execute(args *CommandArgs, reply *CommandReply) error {
 			return err
 		}
 		reply.Result = "[SUCCESS] Key-Value set"
-		
+
 	case "get":
 		value, err := s.Get(args.Key)
 		if err != nil {
