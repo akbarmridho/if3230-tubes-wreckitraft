@@ -17,13 +17,6 @@ type NodeConfiguration struct {
 	Status  ServerConfigurationStatus
 }
 
-func NewNodeConfiguration(id uint64, address shared.Address) NodeConfiguration {
-	return NodeConfiguration{
-		ID:      id,
-		Address: address,
-	}
-}
-
 func (n *NodeConfiguration) GetHost() string {
 	return fmt.Sprintf("%s:%d", n.Address.IP, n.Address.Port)
 }
@@ -184,6 +177,7 @@ type Configurations struct {
 	commitedIndex uint64
 	latest        Configuration
 	latestIndex   uint64
+	mergedServers Configuration
 }
 
 func (c *Configurations) Clone() (copy Configurations) {

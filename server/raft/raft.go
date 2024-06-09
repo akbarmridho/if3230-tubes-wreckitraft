@@ -112,6 +112,7 @@ func NewRaftNode(address shared.Address, fsm FSM, localID uint64, initialCluster
 			commitedIndex: lastLog.Index,
 			commited:      Configuration{Servers: clusters},
 			latest:        Configuration{Servers: clusters},
+			mergedServers: Configuration{Servers: clusters},
 		},
 		electionTimeout: time.Millisecond * 500,
 	}
@@ -183,6 +184,10 @@ func (r *RaftNode) runFollower() {
 }
 
 func (r *RaftNode) runCandidate() {
+	if r.GetConfig().Status == Nonvoter {
+		return
+	}
+
 	logger.Log.Info(fmt.Sprintf("Running node: %d as candidate", r.GetConfig().ID))
 	votesChannel := r.startElection()
 	r.electionTimeout = util.RandomTimeout(
@@ -230,7 +235,7 @@ func (r *RaftNode) initializeLeaderAttributes() {
 
 	lastLogIndex, _ := r.getLastLog()
 
-	for _, cluster := range r.configurations.latest.Servers {
+	for _, cluster := range r.configurations.mergedServers.Servers {
 		if r.id == cluster.ID {
 			continue
 		} else {
@@ -331,7 +336,7 @@ func (r *RaftNode) sendHeartbeat() {
 	//logger.Log.Info(fmt.Sprintf("Sending heartbeat at: %s", time.Now()))
 
 	// send heartbeat to latest configuration (could be commited or uncommited)
-	for _, peer := range r.configurations.latest.Servers {
+	for _, peer := range r.configurations.mergedServers.Servers {
 		if peer.ID == r.GetConfig().ID {
 			continue
 		}
@@ -468,7 +473,8 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration, isHeartbeat bool) {
 
 		appendEntry.PrevLogIndex = prevLogIndex
 		appendEntry.PrevLogTerm = 0
-		if prevLogIndex > 0 {
+
+		if prevLogIndex > 0 && (prevLogIndex-1) < uint64(len(logs)) {
 			appendEntry.PrevLogTerm = logs[prevLogIndex-1].Term
 		}
 

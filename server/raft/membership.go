@@ -32,7 +32,7 @@ func (r *RaftNode) appendConfigurationEntry(request ConfigurationChangeRequest) 
 
 // requestConfigChange is a helper for making configuration change request
 func (r *RaftNode) requestConfigChange(request ConfigurationChangeRequest) error {
-	if !r.IsLeader() {
+	if !r.IsLeader() || r.GetConfig().Status != Voter {
 		return types.NotALeaderError
 	}
 
@@ -46,8 +46,12 @@ func (r *RaftNode) setLatestConfiguration(c Configuration, index uint64) {
 		r.configurations.latestIndex = index
 		logger.Log.Debug(fmt.Sprintf("latest config set %+v with index %d\n", c, index))
 
+		var merged = make(map[uint64]NodeConfiguration)
+
 		// update matchindex nextindex
 		for _, server := range c.Servers {
+			merged[server.ID] = server
+
 			host := server.Address.Host()
 			_, okMatch := r.matchIndex[host]
 			_, okNext := r.nextIndex[host]
@@ -61,7 +65,27 @@ func (r *RaftNode) setLatestConfiguration(c Configuration, index uint64) {
 			}
 		}
 
+		for _, server := range r.configurations.commited.Servers {
+			_, exist := merged[server.ID]
+
+			if !exist {
+				merged[server.ID] = server
+			}
+		}
+
+		var mergedList []NodeConfiguration
+
+		for _, server := range merged {
+			mergedList = append(mergedList, server)
+		}
+
+		r.configurations.mergedServers = Configuration{Servers: mergedList}
 		r.lock.Unlock()
+
+		if !r.configurations.latest.HasServer(r.id) {
+			logger.Log.Info(fmt.Sprintf("This node has been removed from cluster. Exiting ..."))
+			panic("This node has been removed from cluster. Exiting ...")
+		}
 	}
 }
 
@@ -70,6 +94,7 @@ func (r *RaftNode) commitLatestConfiguration() {
 		r.clustersLock.Lock()
 
 		r.configurations.commited = r.configurations.latest.Clone()
+		r.configurations.mergedServers = r.configurations.commited
 		r.configurations.commitedIndex = r.configurations.latestIndex
 		r.clusters = r.configurations.commited.Clone()
 

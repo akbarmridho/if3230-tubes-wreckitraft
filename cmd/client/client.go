@@ -111,6 +111,11 @@ func main() {
 				continue
 			}
 
+			if len(parts) != 3 {
+				fmt.Println("Missing argument. Usage: add_voter id host:port")
+				continue
+			}
+
 			parsedHost := strings.Split(parts[2], ":")
 
 			if len(parsedHost) != 2 {
@@ -130,6 +135,11 @@ func main() {
 			id, err := strconv.ParseUint(parts[1], 10, 64)
 			if err != nil {
 				fmt.Println("Invalid server id. Should be an unsigned integer")
+				continue
+			}
+
+			if len(parts) != 3 {
+				fmt.Println("Missing argument. Usage: add_nonvoter id host:port")
 				continue
 			}
 
@@ -164,7 +174,7 @@ func main() {
 				continue
 			}
 
-			fmt.Println(cli.RemoveServer(id))
+			fmt.Println(cli.DemoteVoter(id))
 
 		default:
 			fmt.Println("Unknown command")

@@ -44,7 +44,7 @@ func (r *RaftNode) replicateLog() {
 
 	// Read peers from latest configuration (could be commited or uncommited)
 	// this is done in order to make the upcoming configuration could catch up
-	for _, peer := range r.configurations.latest.Servers {
+	for _, peer := range r.configurations.mergedServers.Servers {
 		if peer.ID == config.ID {
 			continue
 		}
