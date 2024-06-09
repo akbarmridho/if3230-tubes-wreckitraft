@@ -378,6 +378,10 @@ func (r *RaftNode) ReceiveRequestVote(args *RequestVoteArgs, reply *RequestVoteR
 		return nil
 	}
 
+	if r.currentTerm == args.Term && r.IsLeader() {
+		return nil
+	}
+
 	lastVotedTerm, err := r.stable.Get(keyLastVoteTerm)
 	if err != nil && !errors.Is(err, ErrKeyNotFound) {
 		return nil
