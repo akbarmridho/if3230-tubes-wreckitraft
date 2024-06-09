@@ -496,7 +496,13 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration, isHeartbeat bool) error
 			return err
 		}
 
-		// TODO: handle resp.term
+		// TODO: handle resp.term (wip)
+		if resp.Term > r.getCurrentTerm() {
+			r.setState(FOLLOWER)
+			r.stable.Set(keyCurrentTerm, resp.Term)
+			r.setCurrentTerm(resp.Term)
+			break
+		}
 		if resp.Success {
 			//logger.Log.Info(fmt.Sprintf("Success send append entries to %d", peer.ID))
 			if len(appendEntry.Entries) > 0 && !isHeartbeat {
