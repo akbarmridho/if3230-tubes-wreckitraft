@@ -316,7 +316,7 @@ func (r *RaftNode) sendHeartbeat() {
 		// Send heartbeat
 		logger.Log.Info(fmt.Sprintf("Leader is sending heartbeat to %s:%d", peer.Address.IP, peer.Address.Port))
 
-		go r.appendEntries(peer, false)
+		go r.appendEntries(peer, true)
 	}
 }
 
@@ -519,7 +519,7 @@ func (r *RaftNode) Apply(payload []byte) error {
 type LogArgs struct{}
 
 type LogReply struct {
-	Log []string
+	Log           []string
 	LeaderAddress string
 }
 

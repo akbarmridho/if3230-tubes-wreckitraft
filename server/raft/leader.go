@@ -51,7 +51,7 @@ func (r *RaftNode) replicateLog() {
 		wg.Add(1)
 		go func(peer NodeConfiguration) {
 			defer wg.Done()
-			r.appendEntries(peer, true)
+			r.appendEntries(peer, false)
 		}(peer)
 	}
 
