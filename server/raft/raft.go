@@ -43,7 +43,7 @@ type RaftNode struct {
 	heartbeatTicker *time.Ticker
 }
 
-func NewRaftNode(address shared.Address, fsm FSM, localID uint64) (*RaftNode, error) {
+func NewRaftNode(address shared.Address, fsm FSM, localID uint64, clusters []NodeConfiguration) (*RaftNode, error) {
 	store := Store{
 		BaseDir: fmt.Sprintf("data_%d", localID),
 	}
@@ -69,27 +69,7 @@ func NewRaftNode(address shared.Address, fsm FSM, localID uint64) (*RaftNode, er
 		lastLog = logs[lastIndex-1]
 	}
 
-	// hardcode clusters. TODO delete
-	clusters := []NodeConfiguration{
-		NewNodeConfiguration(
-			0, shared.Address{
-				IP:   "localhost",
-				Port: 5000,
-			},
-		),
-		NewNodeConfiguration(
-			1, shared.Address{
-				IP:   "localhost",
-				Port: 5001,
-			},
-		),
-		NewNodeConfiguration(
-			2, shared.Address{
-				IP:   "localhost",
-				Port: 5002,
-			},
-		),
-	}
+	clusters = append(clusters, NodeConfiguration{ID: localID, Address: address})
 
 	nextIndex := map[string]uint64{}
 	matchIndex := map[string]uint64{}

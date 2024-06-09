@@ -12,9 +12,10 @@ import (
 )
 
 var args struct {
-	ID   uint64 `arg:"required" help:"node ID"`
-	Host string `arg:"required" help:"host of the node"`
-	Port int    `arg:"required" help:"port of the node"`
+	ID       uint64   `arg:"required" help:"node ID"`
+	Host     string   `arg:"required" help:"host of the node"`
+	Port     int      `arg:"required" help:"port of the node"`
+	Clusters []string `arg:"-s,separate" help:"id:host:port"`
 }
 
 func main() {
@@ -26,7 +27,7 @@ func main() {
 	srv, err := server.NewServer(args.ID, shared.Address{
 		IP:   args.Host,
 		Port: args.Port,
-	})
+	}, args.Clusters)
 
 	if err != nil {
 		logger.Log.Fatal(fmt.Sprintf("Failed to create server %s", err.Error()))

@@ -29,9 +29,9 @@ go build cmd/server/server.go
 6. Run Multiple server
 
 ```
-./server --id=0 --host=localhost --port=5000
-./server --id=1 --host=localhost --port=5001
-./server --id=2 --host=localhost --port=5002
+./server --id=0 --host=localhost --port=5000 -s 1:localhost:5001 -s 2:localhost:5002
+./server --id=1 --host=localhost --port=5001 -s 0:localhost:5000 -s 2:localhost:5002
+./server --id=2 --host=localhost --port=5002 -s 0:localhost:5000 -s 1:localhost:5001
 ```
 7. Run the server and client in different terminal
 ```
