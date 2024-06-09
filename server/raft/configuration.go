@@ -7,9 +7,11 @@ import (
 	"if3230-tubes-wreckitraft/server/raft/types"
 	"if3230-tubes-wreckitraft/shared"
 	"net/rpc"
+	"sync"
 )
 
 var rpcClients = make(map[uint64]*rpc.Client)
+var rpcLock sync.RWMutex
 
 type NodeConfiguration struct {
 	ID      uint64
@@ -33,7 +35,9 @@ func (n *NodeConfiguration) Clone() NodeConfiguration {
 }
 
 func (n *NodeConfiguration) GetRpcClient() (*rpc.Client, error) {
+	rpcLock.Lock()
 	current, isExist := rpcClients[n.ID]
+	defer rpcLock.Unlock()
 
 	if isExist {
 		return current, nil
@@ -52,7 +56,9 @@ func (n *NodeConfiguration) GetRpcClient() (*rpc.Client, error) {
 }
 
 func (n *NodeConfiguration) UnsetRpcClient() {
+	rpcLock.Lock()
 	delete(rpcClients, n.ID)
+	defer rpcLock.Unlock()
 }
 
 type Configuration struct {

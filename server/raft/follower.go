@@ -50,7 +50,8 @@ func (r *RaftNode) ReceiveAppendEntries(args *ReceiveAppendEntriesArgs, reply *R
 	if args.Term < r.currentTerm {
 		logger.Log.Warn(
 			fmt.Sprintf(
-				"Failed to receive append entries in node: %d because term < current term", config.ID,
+				"Failed to receive append entries in node: %d because term < current term arg term %d current term %d with entries", config.ID, args.Term,
+				r.currentTerm, args.Entries,
 			),
 		)
 		reply.Success = false
