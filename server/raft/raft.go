@@ -141,7 +141,7 @@ func (r *RaftNode) runFollower() {
 			// not timed out
 			heartbeatTimeout := r.heartbeatTimeout
 			if time.Since(r.getLastContact()) < heartbeatTimeout {
-				logger.Log.Info("Heartbeat not timed out")
+				//logger.Log.Info("Heartbeat not timed out")
 				heartbeatTimer = r.getTimeout(heartbeatTimeout)
 				continue
 			}
@@ -265,7 +265,7 @@ func (r *RaftNode) runLeader() {
 
 	config := r.GetConfig()
 
-	logger.Log.Info(fmt.Sprintf("%s:%d is no longer the leader", config.GetHost(), config.Address.Port))
+	logger.Log.Info(fmt.Sprintf("%s is no longer the leader", config.GetHost()))
 }
 
 func (r *RaftNode) createHeartbeatTicker() {
@@ -285,7 +285,7 @@ func (r *RaftNode) resetHeartbeatTicker() {
 }
 
 func (r *RaftNode) sendHeartbeat() {
-	logger.Log.Info(fmt.Sprintf("Sending heartbeat at: %s", time.Now()))
+	//logger.Log.Info(fmt.Sprintf("Sending heartbeat at: %s", time.Now()))
 
 	// send heartbeat to latest configuration (could be commited or uncommited)
 	for _, peer := range r.configurations.latest.Servers {
@@ -294,7 +294,7 @@ func (r *RaftNode) sendHeartbeat() {
 		}
 
 		// Send heartbeat
-		logger.Log.Info(fmt.Sprintf("Leader is sending heartbeat to %s:%d", peer.Address.IP, peer.Address.Port))
+		//logger.Log.Info(fmt.Sprintf("Leader is sending heartbeat to %s:%d", peer.Address.IP, peer.Address.Port))
 
 		go r.appendEntries(peer, true)
 	}
@@ -404,6 +404,11 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration, isHeartbeat bool) {
 
 	var resp ReceiveAppendEntriesResponse
 	for {
+		// break if not a leader anymore
+		if !r.IsLeader() {
+			break
+		}
+
 		index, ok := nextIndex[peer.Address.Host()]
 		prevLogIndex := uint64(0)
 		if !ok {
@@ -421,8 +426,10 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration, isHeartbeat bool) {
 
 		lastLogIndex, _ := r.getLastLog()
 
-		if lastLogIndex >= index {
+		if lastLogIndex >= index && !isHeartbeat {
+			logger.Log.Debug(fmt.Sprintf("last log index %d with index %d and logs length %d\n", lastLogIndex, index, len(logs)))
 			appendEntry.Entries = logs[index-1:]
+			logger.Log.Debug(fmt.Sprintf("append entry length %d", len(appendEntry.Entries)))
 		}
 		err := r.sendAppendEntries(appendEntry, &resp, peer)
 
@@ -432,7 +439,7 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration, isHeartbeat bool) {
 
 		// TODO: handle resp.term
 		if resp.Success {
-			logger.Log.Info(fmt.Sprintf("Success send append entries to %d", peer.ID))
+			//logger.Log.Info(fmt.Sprintf("Success send append entries to %d", peer.ID))
 			if len(appendEntry.Entries) > 0 && !isHeartbeat {
 				nextIndex[peer.Address.Host()]++
 				r.setNextIndex(nextIndex)
@@ -442,7 +449,9 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration, isHeartbeat bool) {
 			break
 		} else {
 			logger.Log.Info(fmt.Sprintf("Failed send append entries to %d", peer.ID))
-			nextIndex[peer.Address.Host()]--
+			if !isHeartbeat {
+				nextIndex[peer.Address.Host()]--
+			}
 		}
 	}
 }

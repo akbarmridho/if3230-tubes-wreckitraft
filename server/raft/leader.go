@@ -4,24 +4,23 @@ import (
 	"fmt"
 	"if3230-tubes-wreckitraft/shared/logger"
 	"sync"
-	"time"
 )
 
 func (r *RaftNode) sendAppendEntries(
 	req ReceiveAppendEntriesArgs, resp *ReceiveAppendEntriesResponse, peer NodeConfiguration,
 ) error {
-	logger.Log.Info(fmt.Sprintf("Sending append entries to: %d at %s", peer.ID, time.Now()))
+	//logger.Log.Info(fmt.Sprintf("Sending append entries to: %d at %s", peer.ID, time.Now()))
 	client, err := peer.GetRpcClient()
 
 	if err != nil {
-		logger.Log.Warn(err)
+		//logger.Log.Warn(err)
 		return err
 	}
 
 	err = client.Call("RaftNode.ReceiveAppendEntries", &req, resp)
 
 	if err != nil {
-		logger.Log.Warn(fmt.Sprintf("Send append entries to: %d failed", peer.ID))
+		//logger.Log.Warn(fmt.Sprintf("Send append entries to: %d failed", peer.ID))
 		return err
 	}
 
@@ -74,6 +73,7 @@ func (r *RaftNode) replicateLog() {
 	logs, _ := r.logs.GetLogs()
 
 	if majorityIndex > r.getCommitIndex() && logs[majorityIndex-1].Term == r.currentTerm {
+		r.commitLatestConfiguration()
 		r.commitLog(majorityIndex)
 		r.setCommitIndex(majorityIndex)
 	}

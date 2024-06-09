@@ -18,14 +18,13 @@ func (r *RaftNode) appendConfigurationEntry(request ConfigurationChangeRequest) 
 	if err != nil {
 		return err
 	}
-
+	r.setLatestConfiguration(newConfig, r.getLastIndex())
 	err = r.appendLog(LogRequest{Type: CONFIGURATION, Data: encoded})
 
 	if err != nil {
 		return err
 	}
 
-	r.setLatestConfiguration(newConfig, r.getLastIndex())
 	r.replicateLog()
 
 	return nil
@@ -41,35 +40,39 @@ func (r *RaftNode) requestConfigChange(request ConfigurationChangeRequest) error
 }
 
 func (r *RaftNode) setLatestConfiguration(c Configuration, index uint64) {
+	r.lock.Lock()
 	r.configurations.latest = c
 	r.configurations.latestIndex = index
+	logger.Log.Debug(fmt.Sprintf("latest config set %+v with index %d\n", c, index))
+
+	// update matchindex nextindex
+	for _, server := range c.Servers {
+		host := server.Address.Host()
+		_, okMatch := r.matchIndex[host]
+		_, okNext := r.nextIndex[host]
+
+		if !okMatch {
+			r.matchIndex[host] = 0
+		}
+
+		if !okNext {
+			r.nextIndex[host] = 1
+		}
+	}
+
+	r.lock.Unlock()
 }
 
 func (r *RaftNode) commitLatestConfiguration() {
 	if r.configurations.commitedIndex != r.configurations.latestIndex {
 		r.clustersLock.Lock()
-		r.lock.Lock()
+
 		r.configurations.commited = r.configurations.latest.Clone()
 		r.configurations.commitedIndex = r.configurations.latestIndex
 		r.clusters = r.configurations.commited.Clone()
 
-		// update matchindex nextindex
-		for _, server := range r.configurations.commited.Servers {
-			host := server.Address.Host()
-			_, okMatch := r.matchIndex[host]
-			_, okNext := r.nextIndex[host]
+		logger.Log.Debug(fmt.Sprintf("commited config set %+v with index %d\n", r.clusters, r.configurations.commitedIndex))
 
-			lastLogIndex, _ := r.getLastLog()
-			if !okMatch {
-				r.matchIndex[host] = 0
-			}
-
-			if !okNext {
-				r.nextIndex[host] = lastLogIndex + 1
-			}
-		}
-
-		r.lock.Unlock()
 		r.clustersLock.Unlock()
 	}
 }
