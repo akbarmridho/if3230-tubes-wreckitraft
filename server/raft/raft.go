@@ -452,7 +452,10 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration, isHeartbeat bool) {
 			break
 		}
 
+		r.lock.Lock()
 		index, ok := nextIndex[peer.Address.Host()]
+		r.lock.Unlock()
+
 		prevLogIndex := uint64(0)
 		if !ok {
 			index = 0
