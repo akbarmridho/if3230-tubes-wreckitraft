@@ -247,7 +247,8 @@ func (s *Server) Execute(args *CommandArgs, reply *CommandReply) error {
 		if err == nil {
 			reply.Result = fmt.Sprintf("[OK] Append %s with %s successful", args.Key, args.Value)
 		} else {
-			return err
+			//return err
+			reply.Result = err.Error()
 		}
 
 	case "strln":
