@@ -224,16 +224,20 @@ func (s *Server) Execute(args *CommandArgs, reply *CommandReply) error {
 		reply.Result = value
 
 	case "del":
+		value, err := s.Get(args.Key)
+		if err != nil {
+			return err
+		}
+		reply.Result = value
+
 		b, err := json.Marshal(args)
 		if err != nil {
 			return err
 		}
 		err = s.raftNode.Apply(b)
-		if err == nil {
-			value, _ := s.Get(args.Key)
-			reply.Result = value
+		if err != nil {
+			return err
 		}
-
 	case "append":
 		b, err := json.Marshal(args)
 		if err != nil {
@@ -333,15 +337,16 @@ func (s *Server) Execute(args *CommandArgs, reply *CommandReply) error {
 func (s *Server) RequestLog(_ *raft.LogArgs, reply *raft.LogReply) error {
 	reply.LeaderAddress = ""
 	if s.raftNode.IsCandidate() {
-		fmt.Println("[FAIL] failed to execute command, node is candidate")
+		reply.Log = append(reply.Log, "[FAIL] failed to execute command, node is candidate")
 		return nil
 	}
 
 	if !s.raftNode.IsLeader() {
 		reply.LeaderAddress = s.raftNode.GetLeaderAddress()
-		fmt.Println("[FAIL] Node is not the leader")
+		reply.Log = append(reply.Log, "[FAIL] Node is not the leader")
 		return nil
 	}
+
 	logs, err := s.raftNode.GetRequestLog()
 	if err != nil {
 		logger.Log.Error(fmt.Sprintf("Failed to get request log: %s", err.Error()))
