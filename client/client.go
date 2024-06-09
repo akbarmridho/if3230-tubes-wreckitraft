@@ -197,3 +197,11 @@ func (c *Client) AddVoter(id uint64, address shared.Address) string {
 func (c *Client) RemoveServer(id uint64) string {
 	return c.Execute("remove_server", strconv.FormatUint(id, 10), "")
 }
+
+func (c *Client) AddNonvoter(id uint64, address shared.Address) string {
+	return c.Execute("add_nonvoter", strconv.FormatUint(id, 10), address.Host())
+}
+
+func (c *Client) DemoteVoter(id uint64) string {
+	return c.Execute("demote_voter", strconv.FormatUint(id, 10), "")
+}

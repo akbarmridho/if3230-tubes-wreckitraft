@@ -272,12 +272,44 @@ func (s *Server) Execute(args *CommandArgs, reply *CommandReply) error {
 				}
 			}
 		}
+	case "add_nonvoter":
+		address, err := shared.StringToAddress(args.Value)
+
+		if err != nil {
+			reply.Result = "Cannot parse address"
+		} else {
+			id, err := strconv.ParseUint(args.Key, 10, 64)
+			if err != nil {
+				reply.Result = "Cannot parse id"
+			} else {
+				err := s.raftNode.AddNonvoter(id, *address)
+				if err != nil {
+					reply.Result = err.Error()
+					return err
+				} else {
+					reply.Result = "Ok"
+				}
+			}
+		}
 	case "remove_server":
 		id, err := strconv.ParseUint(args.Key, 10, 64)
 		if err != nil {
 			reply.Result = "Cannot parse id"
 		} else {
 			err := s.raftNode.RemoveServer(id)
+			if err != nil {
+				reply.Result = err.Error()
+				return err
+			} else {
+				reply.Result = "Ok"
+			}
+		}
+	case "demote_voter":
+		id, err := strconv.ParseUint(args.Key, 10, 64)
+		if err != nil {
+			reply.Result = "Cannot parse id"
+		} else {
+			err := s.raftNode.DemoteVoter(id)
 			if err != nil {
 				reply.Result = err.Error()
 				return err
