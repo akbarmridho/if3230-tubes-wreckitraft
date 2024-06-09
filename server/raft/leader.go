@@ -50,7 +50,7 @@ func (r *RaftNode) replicateLog() {
 		go func(peer NodeConfiguration) {
 			r.appendEntries(peer, false)
 			mu.Lock()
-			matchIndex := r.matchIndex[peer.Address.Host()]
+			matchIndex := r.getMatchIndex(peer.Address.Host())
 			matchIndexCounter[matchIndex]++
 			if r.isMajority(matchIndexCounter, majority) {
 				majorityAchieved = true

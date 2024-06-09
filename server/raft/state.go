@@ -57,17 +57,16 @@ func (r *raftState) setNextIndex(nextIndex map[string]uint64) {
 	r.lock.Unlock()
 }
 
-func (r *raftState) getMatchIndex() map[string]uint64 {
+func (r *raftState) getMatchIndex(peer string) uint64 {
 	r.lock.Lock()
-	matchIndex := r.matchIndex
-	r.lock.Unlock()
-	return matchIndex
+	defer r.lock.Unlock()
+	return r.matchIndex[peer]
 }
 
-func (r *raftState) setMatchIndex(matchIndex map[string]uint64) {
+func (r *raftState) setMatchIndex(peer string, index uint64) {
 	r.lock.Lock()
-	r.matchIndex = matchIndex
-	r.lock.Unlock()
+	defer r.lock.Unlock()
+	r.matchIndex[peer] = index
 }
 
 func (r *raftState) getLastLog() (index, term uint64) {

@@ -99,9 +99,6 @@ func NewRaftNode(address shared.Address, fsm FSM, localID uint64, initialCluster
 		clusters = append(clusters, NodeConfiguration{ID: localID, Address: address})
 	}
 
-	nextIndex := map[string]uint64{}
-	matchIndex := map[string]uint64{}
-
 	logger.Log.Info("Current ID: ", localID)
 
 	node := RaftNode{
@@ -121,8 +118,8 @@ func NewRaftNode(address shared.Address, fsm FSM, localID uint64, initialCluster
 	node.setCurrentTerm(*currentTerm)
 	node.setLastLog(lastLog.Index, lastLog.Term)
 
-	node.setNextIndex(nextIndex)
-	node.setMatchIndex(matchIndex)
+	node.nextIndex = map[string]uint64{}
+	node.matchIndex = map[string]uint64{}
 
 	// rerun log
 	for _, log := range logs {
@@ -230,7 +227,6 @@ func (r *RaftNode) runCandidate() {
 
 func (r *RaftNode) initializeLeaderAttributes() {
 	nextIndex := map[string]uint64{}
-	matchIndex := map[string]uint64{}
 
 	lastLogIndex, _ := r.getLastLog()
 
@@ -239,12 +235,11 @@ func (r *RaftNode) initializeLeaderAttributes() {
 			continue
 		} else {
 			nextIndex[cluster.Address.Host()] = lastLogIndex + 1
-			matchIndex[cluster.Address.Host()] = 0
+			r.setMatchIndex(cluster.Address.Host(), 0)
 		}
 	}
 
 	r.setNextIndex(nextIndex)
-	r.setMatchIndex(matchIndex)
 }
 
 func (r *RaftNode) startElection() <-chan *RequestVoteResponse {
@@ -446,7 +441,6 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration, isHeartbeat bool) {
 	}
 
 	nextIndex := r.getNextIndex()
-	matchIndex := r.getMatchIndex()
 
 	var resp ReceiveAppendEntriesResponse
 	for {
@@ -489,9 +483,8 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration, isHeartbeat bool) {
 			if len(appendEntry.Entries) > 0 && !isHeartbeat {
 				nextIndex[peer.Address.Host()] += uint64(len(appendEntry.Entries))
 				r.setNextIndex(nextIndex)
-				matchIndex[peer.Address.Host()] += uint64(len(appendEntry.Entries))
-				r.setMatchIndex(matchIndex)
 			}
+			r.setMatchIndex(peer.Address.Host(), nextIndex[peer.Address.Host()]-1)
 			break
 		} else {
 			logger.Log.Info(fmt.Sprintf("Failed send append entries to %d", peer.ID))
