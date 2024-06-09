@@ -3,6 +3,7 @@ package raft
 import (
 	"fmt"
 	"if3230-tubes-wreckitraft/shared/logger"
+	"math/rand"
 )
 
 type ReceiveAppendEntriesArgs struct {
@@ -24,7 +25,12 @@ func (r *RaftNode) ReceiveAppendEntries(args *ReceiveAppendEntriesArgs, reply *R
 	r.setLastContact()
 	config := r.GetConfig()
 
-	//logger.Log.Info(fmt.Sprintf("Node %d receive heartbeat", config.ID))
+	// receive heartbeat
+	if len(args.Entries) == 0 && rand.Float32() < 0.1 {
+		logger.Log.Info(fmt.Sprintf("Node %d receive heartbeat", config.ID))
+	} else if len(args.Entries) != 0 {
+		logger.Log.Info(fmt.Sprintf("Node %d receive append entries", config.ID))
+	}
 
 	currState := r.getState()
 	if currState == CANDIDATE || (args.Term > r.currentTerm && currState == LEADER) || (r.clusterLeader != nil &&

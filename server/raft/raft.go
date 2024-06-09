@@ -7,6 +7,7 @@ import (
 	"if3230-tubes-wreckitraft/shared"
 	"if3230-tubes-wreckitraft/shared/logger"
 	"if3230-tubes-wreckitraft/util"
+	"math/rand"
 	"sync"
 	"time"
 )
@@ -333,7 +334,10 @@ func (r *RaftNode) resetHeartbeatTicker() {
 }
 
 func (r *RaftNode) sendHeartbeat() {
-	//logger.Log.Info(fmt.Sprintf("Sending heartbeat at: %s", time.Now()))
+	// Sample sending heartbeat at 10%
+	if rand.Float32() < 0.1 {
+		logger.Log.Info(fmt.Sprintf("Sending heartbeat at: %s", time.Now()))
+	}
 
 	// send heartbeat to latest configuration (could be commited or uncommited)
 	for _, peer := range r.configurations.mergedServers.Servers {
