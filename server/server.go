@@ -65,6 +65,8 @@ func NewServer(ID uint64, address shared.Address, cluster []string) (*Server, er
 		})
 	}
 
+	server.storage = make(map[string]string)
+
 	raftNode, err := raft.NewRaftNode(
 		address,
 		&server,
@@ -78,7 +80,6 @@ func NewServer(ID uint64, address shared.Address, cluster []string) (*Server, er
 	}
 
 	server.raftNode = raftNode
-	server.storage = make(map[string]string)
 
 	return &server, nil
 }
@@ -272,12 +273,44 @@ func (s *Server) Execute(args *CommandArgs, reply *CommandReply) error {
 				}
 			}
 		}
+	case "add_nonvoter":
+		address, err := shared.StringToAddress(args.Value)
+
+		if err != nil {
+			reply.Result = "Cannot parse address"
+		} else {
+			id, err := strconv.ParseUint(args.Key, 10, 64)
+			if err != nil {
+				reply.Result = "Cannot parse id"
+			} else {
+				err := s.raftNode.AddNonvoter(id, *address)
+				if err != nil {
+					reply.Result = err.Error()
+					return err
+				} else {
+					reply.Result = "Ok"
+				}
+			}
+		}
 	case "remove_server":
 		id, err := strconv.ParseUint(args.Key, 10, 64)
 		if err != nil {
 			reply.Result = "Cannot parse id"
 		} else {
 			err := s.raftNode.RemoveServer(id)
+			if err != nil {
+				reply.Result = err.Error()
+				return err
+			} else {
+				reply.Result = "Ok"
+			}
+		}
+	case "demote_voter":
+		id, err := strconv.ParseUint(args.Key, 10, 64)
+		if err != nil {
+			reply.Result = "Cannot parse id"
+		} else {
+			err := s.raftNode.DemoteVoter(id)
 			if err != nil {
 				reply.Result = err.Error()
 				return err

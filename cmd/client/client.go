@@ -127,7 +127,38 @@ func main() {
 
 			fmt.Println(cli.AddVoter(id, shared.Address{IP: parsedHost[0], Port: int(port)}))
 
+		case "add_nonvoter":
+			id, err := strconv.ParseUint(parts[1], 10, 64)
+			if err != nil {
+				fmt.Println("Invalid server id. Should be an unsigned integer")
+				continue
+			}
+
+			parsedHost := strings.Split(parts[2], ":")
+
+			if len(parsedHost) != 2 {
+				fmt.Println("Invalid host format. Example: localhost:5000")
+				continue
+			}
+
+			port, err := strconv.ParseInt(parsedHost[1], 10, 32)
+
+			if err != nil {
+				fmt.Println("Invalid port value")
+			}
+
+			fmt.Println(cli.AddNonvoter(id, shared.Address{IP: parsedHost[0], Port: int(port)}))
+
 		case "remove_server":
+			id, err := strconv.ParseUint(parts[1], 10, 64)
+			if err != nil {
+				fmt.Println("Invalid server id. Should be an unsigned integer")
+				continue
+			}
+
+			fmt.Println(cli.RemoveServer(id))
+
+		case "demote_voter":
 			id, err := strconv.ParseUint(parts[1], 10, 64)
 			if err != nil {
 				fmt.Println("Invalid server id. Should be an unsigned integer")

@@ -3,7 +3,6 @@ package raft
 import (
 	"fmt"
 	"if3230-tubes-wreckitraft/shared/logger"
-	"time"
 )
 
 type ReceiveAppendEntriesArgs struct {
@@ -27,7 +26,7 @@ func (r *RaftNode) ReceiveAppendEntries(args *ReceiveAppendEntriesArgs, reply *R
 
 	currState := r.getState()
 	if currState == CANDIDATE || (args.Term > r.currentTerm && currState == LEADER) {
-		logger.Log.Info(fmt.Sprintf("%d as candidate receive heartbeat, converted to follower", config.ID))
+		logger.Log.Info(fmt.Sprintf("%d as candidate receive heartbeat, converted to follower. ack leader %+v", config.ID, args.LeaderConfig))
 		r.setState(FOLLOWER)
 		r.setClusterLeader(args.LeaderConfig)
 	}
@@ -36,7 +35,7 @@ func (r *RaftNode) ReceiveAppendEntries(args *ReceiveAppendEntriesArgs, reply *R
 
 	// Receive heartbeat
 	if currState == FOLLOWER {
-		logger.Log.Info(fmt.Sprintf("Node %d receiving heartbeat at: %s", config.ID, time.Now()))
+		//logger.Log.Info(fmt.Sprintf("Node %d receiving heartbeat at: %s", config.ID, time.Now()))
 	}
 
 	if args.Term < r.currentTerm {
@@ -70,26 +69,29 @@ func (r *RaftNode) ReceiveAppendEntries(args *ReceiveAppendEntriesArgs, reply *R
 		logs = append(logs, entry)
 	}
 
-	var lastLog Log
 	if len(logs) > 0 {
-		lastLog = logs[len(logs)-1]
+		lastLog := logs[len(logs)-1]
+
+		r.setLastLog(lastLog.Index, lastLog.Term)
+		r.logs.StoreLogs(logs)
 	}
 
-	// buggy? todo
-	r.setLastLog(lastLog.Index, lastLog.Term)
-	r.logs.StoreLogs(logs)
+	if len(args.Entries) > 0 {
+		//logger.Log.Debug(fmt.Sprintf("received entries with length %d", len(args.Entries)))
+		for _, entry := range args.Entries {
+			if entry.Type == CONFIGURATION {
+				r.commitLatestConfiguration()
+				decodedConfig, err := DecodeConfiguration(entry.Data)
 
-	for _, entry := range logs {
-		if entry.Type == CONFIGURATION {
-			r.commitLatestConfiguration()
-			decodedConfig, err := DecodeConfiguration(entry.Data)
+				if err != nil {
+					logger.Log.Error(fmt.Sprintf("Failed to decode configuration %s", err.Error()))
+					continue
+				}
 
-			if err != nil {
-				logger.Log.Error(fmt.Sprintf("Failed to decode configuration %s", err.Error()))
-				continue
+				logger.Log.Debug(fmt.Sprintf("set latest received from %d", args.LeaderConfig.ID))
+
+				r.setLatestConfiguration(*decodedConfig, entry.Index)
 			}
-
-			r.setLatestConfiguration(*decodedConfig, entry.Index)
 		}
 	}
 
