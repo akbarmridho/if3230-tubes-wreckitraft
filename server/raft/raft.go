@@ -507,7 +507,7 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration, isHeartbeat bool) {
 			r.setMatchIndex(peer.Address.Host(), nextIndex[peer.Address.Host()]-1)
 			break
 		} else {
-			logger.Log.Info(fmt.Sprintf("Failed send append entries to %d", peer.ID))
+			logger.Log.Info(fmt.Sprintf("Failed send append entries to %d with entry %+v", peer.ID, appendEntry.Entries))
 			r.lock.Lock()
 			nextIndex[peer.Address.Host()]--
 			r.lock.Unlock()
