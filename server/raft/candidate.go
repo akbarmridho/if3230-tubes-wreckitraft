@@ -31,6 +31,7 @@ func (r *RaftNode) sendRequestVote(req RequestVoteArgs, resp *RequestVoteRespons
 
 	if err != nil {
 		logger.Log.Warn(fmt.Sprintf("Send request vote to: %s failed", peer.ID))
+		peer.UnsetRpcClient()
 		return
 	}
 	logger.Log.Info("Request vote response: ", *resp)

@@ -172,7 +172,7 @@ func (r *RaftNode) runFollower() {
 				// time out occurs
 				r.clusterLeader = nil
 				r.setState(CANDIDATE)
-			} else {
+			} else if r.clusterLeader != nil {
 				logger.Log.Warn("Heartbeat timeout but node is not a voter. Waiting for new leader")
 				r.clusterLeader = nil
 			}
@@ -201,6 +201,7 @@ func (r *RaftNode) runCandidate() {
 		case v := <-votesChannel:
 			if v.Term > r.getCurrentTerm() {
 				r.setState(FOLLOWER)
+				r.stable.Set(keyCurrentTerm, v.Term)
 				r.setCurrentTerm(v.Term)
 				return
 			}
@@ -246,7 +247,9 @@ func (r *RaftNode) startElection() <-chan *RequestVoteResponse {
 	voterCount := r.clusters.VoterCount()
 	r.clustersLock.RUnlock()
 	votesChannel := make(chan *RequestVoteResponse, voterCount)
-	r.setCurrentTerm(r.getCurrentTerm() + 1)
+	newTerm := r.getCurrentTerm() + 1
+	r.setCurrentTerm(newTerm)
+	r.stable.Set(keyCurrentTerm, newTerm)
 
 	config := r.GetConfig()
 
@@ -332,7 +335,6 @@ func (r *RaftNode) sendHeartbeat() {
 		if peer.ID == r.GetConfig().ID {
 			continue
 		}
-
 		// Send heartbeat
 		//logger.Log.Info(fmt.Sprintf("Leader is sending heartbeat to %s:%d", peer.Address.IP, peer.Address.Port))
 
