@@ -517,6 +517,7 @@ type LogArgs struct{}
 
 type LogReply struct {
 	Log []string
+	LeaderAddress string
 }
 
 func (r *RaftNode) IsLeader() bool {
@@ -538,4 +539,8 @@ func (r *RaftNode) GetLeaderAddress() string {
 		return fmt.Sprintf("%s:%d", r.clusterLeader.Address.IP, r.clusterLeader.Address.Port)
 	}
 	return ""
+}
+
+func (r *RaftNode) GetRequestLog() ([]Log, error) {
+	return r.logs.GetLogs()
 }
