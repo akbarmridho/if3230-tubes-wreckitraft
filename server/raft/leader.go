@@ -35,6 +35,9 @@ func (r *RaftNode) replicateLog() {
 	r.clustersLock.RLock()
 
 	matchIndexCounter := make(map[uint64]int)
+	lastLogIndex, _ := r.getLastLog()
+	matchIndexCounter[lastLogIndex]++
+
 	majority := (r.clusters.VoterCount() / 2) + 1
 	majorityAchieved := false
 
@@ -69,6 +72,7 @@ func (r *RaftNode) replicateLog() {
 	mu.Unlock()
 
 	majorityIndex := r.getMajorityMatchIndex(matchIndexCounter)
+	logger.Log.Info(fmt.Sprintf("Majority index %d Current commit %d", majorityIndex, r.getCommitIndex()))
 
 	logs, _ := r.logs.GetLogs()
 

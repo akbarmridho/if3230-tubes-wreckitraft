@@ -124,12 +124,7 @@ func NewRaftNode(address shared.Address, fsm FSM, localID uint64, initialCluster
 	node.nextIndex = map[string]uint64{}
 	node.matchIndex = map[string]uint64{}
 
-	// rerun log
-	for _, log := range logs {
-		if log.Type == COMMAND {
-			node.fsm.Apply(&log)
-		}
-	}
+	node.setCommitIndex(0)
 
 	// Set up heartbeat
 	node.setHeartbeatTimeout()
@@ -218,6 +213,7 @@ func (r *RaftNode) runCandidate() {
 					r.setState(LEADER)
 					r.setClusterLeader(config)
 					r.initializeLeaderAttributes()
+					r.replicateLog()
 					return
 				}
 			}
@@ -481,7 +477,7 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration, isHeartbeat bool) {
 		err := r.sendAppendEntries(appendEntry, &resp, peer)
 
 		if err != nil {
-			continue
+			break
 		}
 
 		// TODO: handle resp.term
@@ -497,11 +493,9 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration, isHeartbeat bool) {
 			break
 		} else {
 			logger.Log.Info(fmt.Sprintf("Failed send append entries to %d", peer.ID))
-			if !isHeartbeat {
-				r.lock.Lock()
-				nextIndex[peer.Address.Host()]--
-				r.lock.Unlock()
-			}
+			r.lock.Lock()
+			nextIndex[peer.Address.Host()]--
+			r.lock.Unlock()
 		}
 	}
 }
