@@ -153,12 +153,12 @@ func (s *Server) ApplyAppend(key, value string) error {
 
 func (s *Server) Execute(args *CommandArgs, reply *CommandReply) error {
 	logger.Log.Info(fmt.Sprintf("Received command: %s", args.Command))
+	reply.LeaderAddress = ""
 	if s.raftNode.IsCandidate() {
 		reply.Result = "[FAIL] failed to execute command, node is candidate"
 		return nil
 	}
 
-	reply.LeaderAddress = ""
 
 	if !s.raftNode.IsLeader() {
 		reply.LeaderAddress = s.raftNode.GetLeaderAddress()
@@ -194,7 +194,8 @@ func (s *Server) Execute(args *CommandArgs, reply *CommandReply) error {
 		}
 		err = s.raftNode.Apply(b)
 		if err == nil {
-			reply.Result = fmt.Sprintf("[OK] Delete %s successful", args.Key)
+			value, _ := s.Get(args.Key)
+			reply.Result = value
 		}
 
 	case "append":
@@ -226,5 +227,40 @@ func (s *Server) Execute(args *CommandArgs, reply *CommandReply) error {
 		return err
 	}
 
+	return nil
+}
+
+func (s *Server) RequestLog(_ *raft.LogArgs, reply *raft.LogReply) error {
+	reply.LeaderAddress = ""
+	if s.raftNode.IsCandidate() {
+		fmt.Println("[FAIL] failed to execute command, node is candidate")
+		return nil
+	}
+
+
+	if !s.raftNode.IsLeader() {
+		reply.LeaderAddress = s.raftNode.GetLeaderAddress()
+		fmt.Println("[FAIL] Node is not the leader")
+		return nil
+	}
+	logs, err := s.raftNode.GetRequestLog()
+	if err != nil {
+		logger.Log.Error(fmt.Sprintf("Failed to get request log: %s", err.Error()))
+		return err
+	}
+	var c CommandArgs
+	for _, log := range logs {
+		if err := json.Unmarshal(log.Data, &c); err != nil {
+			logger.Log.Error(fmt.Sprintf("Failed to unmarshal command: %s", err.Error()))
+			return err
+		}
+		reply.Log = append(reply.Log, fmt.Sprintf("%s %s %s", c.Command, c.Key, c.Value))
+	}
+	logger.Log.Info(fmt.Sprintf("Request log: %v", reply.Log))
+	return nil
+}
+
+func (s *Server) Ping(args struct{}, reply *bool) error {
+	*reply = true
 	return nil
 }
