@@ -65,6 +65,8 @@ func NewServer(ID uint64, address shared.Address, cluster []string) (*Server, er
 		})
 	}
 
+	server.storage = make(map[string]string)
+
 	raftNode, err := raft.NewRaftNode(
 		address,
 		&server,
@@ -78,7 +80,6 @@ func NewServer(ID uint64, address shared.Address, cluster []string) (*Server, er
 	}
 
 	server.raftNode = raftNode
-	server.storage = make(map[string]string)
 
 	return &server, nil
 }

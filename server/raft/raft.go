@@ -43,7 +43,7 @@ type RaftNode struct {
 	heartbeatTicker *time.Ticker
 }
 
-func NewRaftNode(address shared.Address, fsm FSM, localID uint64, clusters []NodeConfiguration) (*RaftNode, error) {
+func NewRaftNode(address shared.Address, fsm FSM, localID uint64, initialCluster []NodeConfiguration) (*RaftNode, error) {
 	store := Store{
 		BaseDir: fmt.Sprintf("data_%d", localID),
 	}
@@ -69,7 +69,32 @@ func NewRaftNode(address shared.Address, fsm FSM, localID uint64, clusters []Nod
 		lastLog = logs[lastIndex-1]
 	}
 
-	clusters = append(clusters, NodeConfiguration{ID: localID, Address: address})
+	configLogFound := false
+	var configLog Log
+
+	for _, log := range logs {
+		if log.Type == CONFIGURATION {
+			configLogFound = true
+			configLog = log
+		}
+	}
+
+	var clusters []NodeConfiguration
+
+	if configLogFound {
+		logger.Log.Info("Previous node configuration found. Ignoring cluster data from program arguments")
+		decodedConfig, err := DecodeConfiguration(configLog.Data)
+
+		if err != nil {
+			logger.Log.Error(fmt.Sprintf("Failed to decode configuration %s", err.Error()))
+			panic("Failed to load configuration data")
+		}
+
+		clusters = decodedConfig.Servers
+	} else {
+		clusters = append(clusters, initialCluster...)
+		clusters = append(clusters, NodeConfiguration{ID: localID, Address: address})
+	}
 
 	nextIndex := map[string]uint64{}
 	matchIndex := map[string]uint64{}
@@ -92,8 +117,8 @@ func NewRaftNode(address shared.Address, fsm FSM, localID uint64, clusters []Nod
 		stable:   store,
 		clusters: Configuration{Servers: clusters},
 		configurations: Configurations{
-			latestIndex:   0,
-			commitedIndex: 0,
+			latestIndex:   lastLog.Index,
+			commitedIndex: lastLog.Index,
 			commited:      Configuration{Servers: clusters},
 			latest:        Configuration{Servers: clusters},
 		},
@@ -104,6 +129,13 @@ func NewRaftNode(address shared.Address, fsm FSM, localID uint64, clusters []Nod
 
 	node.setNextIndex(nextIndex)
 	node.setMatchIndex(matchIndex)
+
+	// rerun log
+	for _, log := range logs {
+		if log.Type == COMMAND {
+			node.fsm.Apply(&log)
+		}
+	}
 
 	// Set up heartbeat
 	node.setHeartbeatTimeout()
