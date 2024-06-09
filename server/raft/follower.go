@@ -22,6 +22,13 @@ type ReceiveAppendEntriesResponse struct {
 
 // ReceiveAppendEntries Receive
 func (r *RaftNode) ReceiveAppendEntries(args *ReceiveAppendEntriesArgs, reply *ReceiveAppendEntriesResponse) error {
+	if r.getCurrentTerm() < args.Term && r.IsLeader() {
+		// I a leader, stepping down
+		r.setState(FOLLOWER)
+		r.setClusterLeader(args.LeaderConfig.Clone())
+		r.setCurrentTerm(args.Term)
+	}
+
 	r.setLastContact()
 	config := r.GetConfig()
 
