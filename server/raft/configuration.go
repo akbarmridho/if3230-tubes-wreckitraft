@@ -58,6 +58,10 @@ func (n *NodeConfiguration) GetRpcClient() (*rpc.Client, error) {
 	return client, nil
 }
 
+func (n *NodeConfiguration) UnsetRpcClient() {
+	delete(rpcClients, n.ID)
+}
+
 type Configuration struct {
 	Servers []NodeConfiguration
 }
