@@ -76,15 +76,6 @@ func NewRaftNode(address shared.Address, fsm FSM, localID uint64, clusters []Nod
 
 	logger.Log.Info("Current ID: ", localID)
 
-	for _, cluster := range clusters {
-		if localID == cluster.ID {
-			logger.Log.Info(cluster)
-		} else {
-			nextIndex[cluster.Address.Host()] = lastLog.Index + 1
-			matchIndex[cluster.Address.Host()] = 0
-		}
-	}
-
 	node := RaftNode{
 		id:       localID,
 		fsm:      fsm,
@@ -191,6 +182,7 @@ func (r *RaftNode) runCandidate() {
 					logger.Log.Info(fmt.Sprintf("%d won the election", config.ID))
 					r.setState(LEADER)
 					r.setClusterLeader(config)
+					r.initializeLeaderAttributes()
 					return
 				}
 			}
@@ -199,6 +191,25 @@ func (r *RaftNode) runCandidate() {
 			return
 		}
 	}
+}
+
+func (r *RaftNode) initializeLeaderAttributes() {
+	nextIndex := map[string]uint64{}
+	matchIndex := map[string]uint64{}
+
+	lastLogIndex, _ := r.getLastLog()
+
+	for _, cluster := range r.configurations.latest.Servers {
+		if r.id == cluster.ID {
+			continue
+		} else {
+			nextIndex[cluster.Address.Host()] = lastLogIndex + 1
+			matchIndex[cluster.Address.Host()] = 0
+		}
+	}
+
+	r.setNextIndex(nextIndex)
+	r.setMatchIndex(matchIndex)
 }
 
 func (r *RaftNode) startElection() <-chan *RequestVoteResponse {
