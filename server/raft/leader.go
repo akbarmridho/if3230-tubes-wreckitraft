@@ -86,7 +86,7 @@ func (r *RaftNode) replicateLog() error {
 
 	logs, _ := r.logs.GetLogs()
 
-	if majorityIndex > r.getCommitIndex() && logs[majorityIndex-1].Term == r.currentTerm {
+	if majorityIndex > r.getCommitIndex() && uint64(len(logs)) >= majorityIndex && logs[majorityIndex-1].Term == r.currentTerm {
 		r.commitLatestConfiguration()
 		r.commitLog(majorityIndex)
 		r.setCommitIndex(majorityIndex)

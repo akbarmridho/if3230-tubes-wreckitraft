@@ -515,9 +515,11 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration, isHeartbeat bool) error
 			break
 		} else {
 			logger.Log.Info(fmt.Sprintf("Failed send append entries to %d with entry %+v", peer.ID, appendEntry.Entries))
-			r.lock.Lock()
-			nextIndex[peer.Address.Host()]--
-			r.lock.Unlock()
+			if nextIndex[peer.Address.Host()] > 1 {
+				r.lock.Lock()
+				nextIndex[peer.Address.Host()]--
+				r.lock.Unlock()
+			}
 		}
 	}
 	return nil
