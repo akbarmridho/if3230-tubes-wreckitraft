@@ -16,12 +16,17 @@ var args struct {
 
 func main() {
 	// Parse arg
-
 	arg.MustParse(&args)
 
-	// Connect to the selected server
+	// List of predefined servers
+	servers := append([]string{args.Host}, []string{
+		"localhost:5001",
+		"localhost:5002",
+	}...)
+
+	// Connect to the first available server
 	log.Printf("got host %s", args.Host)
-	cli, err := client.NewClient(args.Host)
+	cli, err := client.NewClient(servers)
 	if err != nil {
 		log.Fatalf("Failed to connect to server: %v", err)
 	}
