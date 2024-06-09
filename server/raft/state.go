@@ -1,7 +1,6 @@
 package raft
 
 import (
-	"if3230-tubes-wreckitraft/shared"
 	"sync"
 	"sync/atomic"
 )
@@ -12,8 +11,8 @@ type raftState struct {
 	lastAppliedLog uint64
 	lastLogIndex   uint64 // cache of log store
 	lastLogTerm    uint64
-	nextIndex      map[shared.Address]uint64
-	matchIndex     map[shared.Address]uint64
+	nextIndex      map[string]uint64
+	matchIndex     map[string]uint64
 	routinesGroup  sync.WaitGroup
 	state          NodeType
 	lock           sync.Mutex
@@ -45,27 +44,27 @@ func (r *raftState) setCommitIndex(commitIndex uint64) {
 	atomic.StoreUint64(&r.commitIndex, commitIndex)
 }
 
-func (r *raftState) getNextIndex() map[shared.Address]uint64 {
+func (r *raftState) getNextIndex() map[string]uint64 {
 	r.lock.Lock()
 	nextIndex := r.nextIndex
 	r.lock.Unlock()
 	return nextIndex
 }
 
-func (r *raftState) setNextIndex(nextIndex map[shared.Address]uint64) {
+func (r *raftState) setNextIndex(nextIndex map[string]uint64) {
 	r.lock.Lock()
 	r.nextIndex = nextIndex
 	r.lock.Unlock()
 }
 
-func (r *raftState) getMatchIndex() map[shared.Address]uint64 {
+func (r *raftState) getMatchIndex() map[string]uint64 {
 	r.lock.Lock()
 	matchIndex := r.matchIndex
 	r.lock.Unlock()
 	return matchIndex
 }
 
-func (r *raftState) setMatchIndex(matchIndex map[shared.Address]uint64) {
+func (r *raftState) setMatchIndex(matchIndex map[string]uint64) {
 	r.lock.Lock()
 	r.matchIndex = matchIndex
 	r.lock.Unlock()

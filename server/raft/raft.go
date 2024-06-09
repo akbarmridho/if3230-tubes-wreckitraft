@@ -91,8 +91,8 @@ func NewRaftNode(address shared.Address, fsm FSM, localID uint64) (*RaftNode, er
 		),
 	}
 
-	nextIndex := map[shared.Address]uint64{}
-	matchIndex := map[shared.Address]uint64{}
+	nextIndex := map[string]uint64{}
+	matchIndex := map[string]uint64{}
 
 	logger.Log.Info("Current ID: ", localID)
 
@@ -100,8 +100,8 @@ func NewRaftNode(address shared.Address, fsm FSM, localID uint64) (*RaftNode, er
 		if localID == cluster.ID {
 			logger.Log.Info(cluster)
 		} else {
-			nextIndex[cluster.Address] = lastLog.Index + 1
-			matchIndex[cluster.Address] = 0
+			nextIndex[cluster.Address.Host()] = lastLog.Index + 1
+			matchIndex[cluster.Address.Host()] = 0
 		}
 	}
 
@@ -424,7 +424,7 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration, isHeartbeat bool) {
 
 	var resp ReceiveAppendEntriesResponse
 	for {
-		index, ok := nextIndex[peer.Address]
+		index, ok := nextIndex[peer.Address.Host()]
 		prevLogIndex := uint64(0)
 		if !ok {
 			index = 0
@@ -454,15 +454,15 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration, isHeartbeat bool) {
 		if resp.Success {
 			logger.Log.Info(fmt.Sprintf("Success send append entries to %d", peer.ID))
 			if len(appendEntry.Entries) > 0 && !isHeartbeat {
-				nextIndex[peer.Address]++
+				nextIndex[peer.Address.Host()]++
 				r.setNextIndex(nextIndex)
-				matchIndex[peer.Address]++
+				matchIndex[peer.Address.Host()]++
 				r.setMatchIndex(matchIndex)
 			}
 			break
 		} else {
 			logger.Log.Info(fmt.Sprintf("Failed send append entries to %d", peer.ID))
-			nextIndex[peer.Address]--
+			nextIndex[peer.Address.Host()]--
 		}
 	}
 }

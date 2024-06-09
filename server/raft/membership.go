@@ -48,9 +48,28 @@ func (r *RaftNode) setLatestConfiguration(c Configuration, index uint64) {
 func (r *RaftNode) commitLatestConfiguration() {
 	if r.configurations.commitedIndex != r.configurations.latestIndex {
 		r.clustersLock.Lock()
+		r.lock.Lock()
 		r.configurations.commited = r.configurations.latest.Clone()
 		r.configurations.commitedIndex = r.configurations.latestIndex
 		r.clusters = r.configurations.commited.Clone()
+
+		// update matchindex nextindex
+		for _, server := range r.configurations.commited.Servers {
+			host := server.Address.Host()
+			_, okMatch := r.matchIndex[host]
+			_, okNext := r.nextIndex[host]
+
+			lastLogIndex, _ := r.getLastLog()
+			if !okMatch {
+				r.matchIndex[host] = 0
+			}
+
+			if !okNext {
+				r.nextIndex[host] = lastLogIndex + 1
+			}
+		}
+
+		r.lock.Unlock()
 		r.clustersLock.Unlock()
 	}
 }
