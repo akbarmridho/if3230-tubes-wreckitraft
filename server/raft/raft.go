@@ -115,6 +115,9 @@ func NewRaftNode(address shared.Address, fsm FSM, localID uint64, initialCluster
 		},
 		electionTimeout: time.Millisecond * 500,
 	}
+
+	logger.Log.Info(fmt.Sprintf("used clusters %+v", clusters))
+
 	node.setCurrentTerm(*currentTerm)
 	node.setLastLog(lastLog.Index, lastLog.Term)
 
@@ -346,10 +349,10 @@ func (r *RaftNode) getTimeout(timeout time.Duration) <-chan time.Time {
 }
 
 func (r *RaftNode) setClusterLeader(config NodeConfiguration) {
+	logger.Log.Debug(fmt.Sprintf("set leader to %+v", config))
 	r.clusterLeaderLock.Lock()
-	defer r.clusterLeaderLock.Unlock()
-
 	r.clusterLeader = &config
+	r.clusterLeaderLock.Unlock()
 }
 
 func (r *RaftNode) getLastContact() time.Time {
@@ -481,7 +484,9 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration, isHeartbeat bool) {
 		if resp.Success {
 			//logger.Log.Info(fmt.Sprintf("Success send append entries to %d", peer.ID))
 			if len(appendEntry.Entries) > 0 && !isHeartbeat {
+				r.lock.Lock()
 				nextIndex[peer.Address.Host()] += uint64(len(appendEntry.Entries))
+				r.lock.Unlock()
 				r.setNextIndex(nextIndex)
 			}
 			r.setMatchIndex(peer.Address.Host(), nextIndex[peer.Address.Host()]-1)
@@ -489,7 +494,9 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration, isHeartbeat bool) {
 		} else {
 			logger.Log.Info(fmt.Sprintf("Failed send append entries to %d", peer.ID))
 			if !isHeartbeat {
+				r.lock.Lock()
 				nextIndex[peer.Address.Host()]--
+				r.lock.Unlock()
 			}
 		}
 	}

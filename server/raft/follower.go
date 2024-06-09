@@ -25,10 +25,11 @@ func (r *RaftNode) ReceiveAppendEntries(args *ReceiveAppendEntriesArgs, reply *R
 	config := r.GetConfig()
 
 	currState := r.getState()
-	if currState == CANDIDATE || (args.Term > r.currentTerm && currState == LEADER) {
-		logger.Log.Info(fmt.Sprintf("%d as candidate receive heartbeat, converted to follower. ack leader %+v", config.ID, args.LeaderConfig))
+	if currState == CANDIDATE || (args.Term > r.currentTerm && currState == LEADER) || (r.clusterLeader != nil &&
+		args.LeaderConfig.ID != r.clusterLeader.ID) || r.clusterLeader == nil {
+		logger.Log.Info(fmt.Sprintf("Node %d receive heartbeat, converted to follower. ack leader %+v", config.ID, args.LeaderConfig))
 		r.setState(FOLLOWER)
-		r.setClusterLeader(args.LeaderConfig)
+		r.setClusterLeader(args.LeaderConfig.Clone())
 	}
 
 	reply.Term = r.currentTerm
