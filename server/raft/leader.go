@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"errors"
 	"fmt"
 	"if3230-tubes-wreckitraft/shared/logger"
 	"sync"
@@ -28,7 +29,7 @@ func (r *RaftNode) sendAppendEntries(
 	return nil
 }
 
-func (r *RaftNode) replicateLog() {
+func (r *RaftNode) replicateLog() error {
 	var mu sync.Mutex
 	cond := sync.NewCond(&mu)
 
@@ -52,10 +53,14 @@ func (r *RaftNode) replicateLog() {
 		// Log replication to followers
 		logger.Log.Info(fmt.Sprintf("Leader is replicating log to node %d", peer.ID))
 		go func(peer NodeConfiguration) {
-			r.appendEntries(peer, false)
+			err := r.appendEntries(peer, false)
 			mu.Lock()
-			matchIndex := r.getMatchIndex(peer.Address.Host())
-			matchIndexCounter[matchIndex]++
+			if err != nil {
+				matchIndexCounter[uint64(0)]++
+			} else {
+				matchIndex := r.getMatchIndex(peer.Address.Host())
+				matchIndexCounter[matchIndex]++
+			}
 			if r.isMajority(matchIndexCounter, majority) {
 				majorityAchieved = true
 				cond.Broadcast()
@@ -75,6 +80,10 @@ func (r *RaftNode) replicateLog() {
 	majorityIndex := r.getMajorityMatchIndex(matchIndexCounter)
 	logger.Log.Info(fmt.Sprintf("Majority index %d Current commit %d", majorityIndex, r.getCommitIndex()))
 
+	if majorityIndex == 0 {
+		return ErrNotMajority
+	}
+
 	logs, _ := r.logs.GetLogs()
 
 	if majorityIndex > r.getCommitIndex() && logs[majorityIndex-1].Term == r.currentTerm {
@@ -82,7 +91,11 @@ func (r *RaftNode) replicateLog() {
 		r.commitLog(majorityIndex)
 		r.setCommitIndex(majorityIndex)
 	}
+
+	return nil
 }
+
+var ErrNotMajority = errors.New("failed to replicate log, majority isn't reached")
 
 func (r *RaftNode) isMajority(matchIndexCounter map[uint64]int, majority int) bool {
 	for _, count := range matchIndexCounter {

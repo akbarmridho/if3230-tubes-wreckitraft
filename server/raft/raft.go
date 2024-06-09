@@ -444,7 +444,7 @@ func (r *RaftNode) appendLog(request LogRequest) error {
 	return nil
 }
 
-func (r *RaftNode) appendEntries(peer NodeConfiguration, isHeartbeat bool) {
+func (r *RaftNode) appendEntries(peer NodeConfiguration, isHeartbeat bool) error {
 	logs, _ := r.logs.GetLogs()
 
 	appendEntry := ReceiveAppendEntriesArgs{
@@ -492,7 +492,8 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration, isHeartbeat bool) {
 		err := r.sendAppendEntries(appendEntry, &resp, peer)
 
 		if err != nil {
-			break
+			//break
+			return err
 		}
 
 		// TODO: handle resp.term
@@ -513,6 +514,7 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration, isHeartbeat bool) {
 			r.lock.Unlock()
 		}
 	}
+	return nil
 }
 
 func (r *RaftNode) commitLog(newCommitIndex uint64) {
@@ -560,7 +562,10 @@ func (r *RaftNode) Apply(payload []byte) error {
 	if err != nil {
 		return err
 	}
-	r.replicateLog()
+	err = r.replicateLog()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
