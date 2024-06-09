@@ -64,32 +64,43 @@ func (c *Client) Reconnect() error {
 }
 
 func (c *Client) Execute(command, key, value string) string {
+	args := &server.CommandArgs{Command: command, Key: key, Value: value}
+	reply := c.executeCommand(args, 0)
+	return reply.Result
+}
+
+func (c *Client) executeCommand(args *server.CommandArgs, redirects int) server.CommandReply {
+	const maxRedirects = 4
+	var reply server.CommandReply
+	var err error
+
+	if redirects >= maxRedirects {
+		log.Fatalf("Exceeded maximum number of redirects: %d", maxRedirects)
+	}
+
 	if err := c.HealthCheck(); err != nil {
 		log.Printf("Health check failed for server %s: %v", c.serverAddress, err)
 		if err := c.Reconnect(); err != nil {
-			log.Fatalf("Failed to reconnect: %v", err)
+			log.Printf("Failed to reconnect: %v", err)
 		}
 	}
-	args := &server.CommandArgs{Command: command, Key: key, Value: value}
-	var reply server.CommandReply
 
-	err := c.rpcClient.Call("Server.Execute", args, &reply)
+	_ = c.rpcClient.Call("Server.Execute", args, &reply)
+
 	if reply.LeaderAddress != "" {
 		fmt.Println(reply.Result)
 		log.Printf("Redirecting to leader at %s", reply.LeaderAddress)
 		c.serverAddress = reply.LeaderAddress
 		c.rpcClient, err = rpc.DialHTTP("tcp", c.serverAddress)
 		if err != nil {
-			log.Fatalf("Failed to connect to new leader: %v", err)
+			log.Printf("Failed to connect to new leader: %v", err)
 		}
-		err = c.rpcClient.Call("Server.Execute", args, &reply)
-		if err != nil {
-			log.Fatalf("Execute error after redirection: %v", err)
-		}
+		return c.executeCommand(args, redirects+1)
 	}
 
-	return reply.Result
+	return reply
 }
+
 
 // RequestLog retrieves the log entries from the server
 func (c *Client) RequestLog() []string {
@@ -106,7 +117,7 @@ func (c *Client) RequestLog() []string {
 	if err != nil {
 		log.Printf("RequestLog error: %v", err)
 	}
-	if reply.LeaderAddress!=""{
+	if reply.LeaderAddress != "" {
 		log.Printf("Redirecting to leader at %s", reply.LeaderAddress)
 		c.serverAddress = reply.LeaderAddress
 		c.rpcClient, err = rpc.DialHTTP("tcp", c.serverAddress)
@@ -114,9 +125,6 @@ func (c *Client) RequestLog() []string {
 			log.Fatalf("Failed to connect to new leader: %v", err)
 		}
 		err = c.rpcClient.Call("Server.RequestLog", args, &reply)
-		if err != nil {
-			log.Fatalf("Execute error after redirection: %v", err)
-		}
 	}
 	return reply.Log
 }
