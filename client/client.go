@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"if3230-tubes-wreckitraft/server"
 	"if3230-tubes-wreckitraft/server/raft"
+	"if3230-tubes-wreckitraft/shared"
 	"log"
 	"net/rpc"
+	"strconv"
 )
 
 type Client struct {
@@ -14,7 +16,7 @@ type Client struct {
 	servers       []string
 }
 
-// NewClient 
+// NewClient
 func NewClient(servers []string) (*Client, error) {
 	var lastErr error
 	for _, server := range servers {
@@ -186,4 +188,12 @@ func (c *Client) Del(key string) string {
 
 func (c *Client) Append(key, value string) string {
 	return c.Execute("append", key, value)
+}
+
+func (c *Client) AddVoter(id uint64, address shared.Address) string {
+	return c.Execute("add_voter", strconv.FormatUint(id, 10), address.Host())
+}
+
+func (c *Client) RemoveServer(id uint64) string {
+	return c.Execute("remove_server", strconv.FormatUint(id, 10), "")
 }

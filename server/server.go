@@ -10,6 +10,8 @@ import (
 	"net"
 	"net/http"
 	"net/rpc"
+	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -30,13 +32,44 @@ type Server struct {
 	storageLock sync.RWMutex
 }
 
-func NewServer(ID uint64, address shared.Address) (*Server, error) {
+func NewServer(ID uint64, address shared.Address, cluster []string) (*Server, error) {
 	server := Server{}
+
+	var clusterConfig []raft.NodeConfiguration
+
+	for _, clust := range cluster {
+		splitted := strings.Split(clust, ":")
+
+		if len(splitted) != 3 {
+			logger.Log.Fatal(fmt.Sprintf("Invalid cluster format %s. Should follow id:host:port", clust))
+		}
+
+		id, err := strconv.ParseUint(splitted[0], 10, 64)
+
+		if err != nil {
+			logger.Log.Fatal(fmt.Sprintf("Invalid cluster format %s. Should follow id:host:port", clust))
+		}
+
+		port, err := strconv.ParseInt(splitted[2], 10, 32)
+
+		if err != nil {
+			logger.Log.Fatal(fmt.Sprintf("Invalid cluster format %s. Should follow id:host:port", clust))
+		}
+
+		clusterConfig = append(clusterConfig, raft.NodeConfiguration{
+			ID: id,
+			Address: shared.Address{
+				IP:   splitted[1],
+				Port: int(port),
+			},
+		})
+	}
 
 	raftNode, err := raft.NewRaftNode(
 		address,
 		&server,
 		ID,
+		clusterConfig,
 	)
 
 	if err != nil {
@@ -162,7 +195,6 @@ func (s *Server) Execute(args *CommandArgs, reply *CommandReply) error {
 		return nil
 	}
 
-
 	if !s.raftNode.IsLeader() {
 		reply.LeaderAddress = s.raftNode.GetLeaderAddress()
 		reply.Result = "[FAIL] Node is not the leader"
@@ -221,6 +253,38 @@ func (s *Server) Execute(args *CommandArgs, reply *CommandReply) error {
 	case "ping":
 		reply.Result = "pong"
 
+	case "add_voter":
+		address, err := shared.StringToAddress(args.Value)
+
+		if err != nil {
+			reply.Result = "Cannot parse address"
+		} else {
+			id, err := strconv.ParseUint(args.Key, 10, 64)
+			if err != nil {
+				reply.Result = "Cannot parse id"
+			} else {
+				err := s.raftNode.AddVoter(id, *address)
+				if err != nil {
+					reply.Result = err.Error()
+					return err
+				} else {
+					reply.Result = "Ok"
+				}
+			}
+		}
+	case "remove_server":
+		id, err := strconv.ParseUint(args.Key, 10, 64)
+		if err != nil {
+			reply.Result = "Cannot parse id"
+		} else {
+			err := s.raftNode.RemoveServer(id)
+			if err != nil {
+				reply.Result = err.Error()
+				return err
+			} else {
+				reply.Result = "Ok"
+			}
+		}
 	default:
 		return errors.New("unknown command")
 	}
@@ -239,7 +303,6 @@ func (s *Server) RequestLog(_ *raft.LogArgs, reply *raft.LogReply) error {
 		fmt.Println("[FAIL] failed to execute command, node is candidate")
 		return nil
 	}
-
 
 	if !s.raftNode.IsLeader() {
 		reply.LeaderAddress = s.raftNode.GetLeaderAddress()
