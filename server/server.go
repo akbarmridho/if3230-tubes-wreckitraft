@@ -82,7 +82,10 @@ func (s *Server) Start() error {
 	}
 
 	rpc.HandleHTTP()
-	address := fmt.Sprintf("%s:%d", s.raftNode.Config.Address.IP, s.raftNode.Config.Address.Port)
+
+	config := s.raftNode.GetConfig()
+
+	address := fmt.Sprintf("%s:%d", config.Address.IP, config.Address.Port)
 	logger.Log.Info(fmt.Sprintf("Server is running on %s", address))
 	// Network Listener
 	listener, err := net.Listen("tcp", address)

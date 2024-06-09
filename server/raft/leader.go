@@ -35,10 +35,14 @@ func (r *RaftNode) replicateLog() {
 
 	var wg sync.WaitGroup
 
+	config := r.GetConfig()
+
 	r.clustersLock.RLock()
 
-	for _, peer := range r.clusters.Servers {
-		if peer.ID == r.Config.ID {
+	// Read peers from latest configuration (could be commited or uncommited)
+	// this is done in order to make the upcoming configuration could catch up
+	for _, peer := range r.configurations.latest.Servers {
+		if peer.ID == config.ID {
 			continue
 		}
 
@@ -53,6 +57,7 @@ func (r *RaftNode) replicateLog() {
 
 	r.clustersLock.RUnlock()
 
+	// todo check ini gak nunggu majority tapi semua?
 	wg.Wait()
 
 	var matchIndices []uint64

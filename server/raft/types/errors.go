@@ -2,6 +2,6 @@ package types
 
 import "errors"
 
-var NodeNetworkError = errors.New("Node is unreachable")
+var NodeNetworkError = errors.New("node is unreachable")
 
-var NotALeaderError = errors.New("Node is not a leader")
+var NotALeaderError = errors.New("node is not a leader")
