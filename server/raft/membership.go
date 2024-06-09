@@ -40,27 +40,29 @@ func (r *RaftNode) requestConfigChange(request ConfigurationChangeRequest) error
 }
 
 func (r *RaftNode) setLatestConfiguration(c Configuration, index uint64) {
-	r.lock.Lock()
-	r.configurations.latest = c
-	r.configurations.latestIndex = index
-	logger.Log.Debug(fmt.Sprintf("latest config set %+v with index %d\n", c, index))
+	if r.configurations.latestIndex != index {
+		r.lock.Lock()
+		r.configurations.latest = c
+		r.configurations.latestIndex = index
+		logger.Log.Debug(fmt.Sprintf("latest config set %+v with index %d\n", c, index))
 
-	// update matchindex nextindex
-	for _, server := range c.Servers {
-		host := server.Address.Host()
-		_, okMatch := r.matchIndex[host]
-		_, okNext := r.nextIndex[host]
+		// update matchindex nextindex
+		for _, server := range c.Servers {
+			host := server.Address.Host()
+			_, okMatch := r.matchIndex[host]
+			_, okNext := r.nextIndex[host]
 
-		if !okMatch {
-			r.matchIndex[host] = 0
+			if !okMatch {
+				r.matchIndex[host] = 0
+			}
+
+			if !okNext {
+				r.nextIndex[host] = 1
+			}
 		}
 
-		if !okNext {
-			r.nextIndex[host] = 1
-		}
+		r.lock.Unlock()
 	}
-
-	r.lock.Unlock()
 }
 
 func (r *RaftNode) commitLatestConfiguration() {

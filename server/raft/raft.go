@@ -69,6 +69,9 @@ func NewRaftNode(address shared.Address, fsm FSM, localID uint64, initialCluster
 		lastLog = logs[lastIndex-1]
 	}
 
+	logger.Log.Info(fmt.Sprintf("Found %d logs", len(logs)))
+	logger.Log.Info(fmt.Sprintf("logs %+v", logs))
+
 	configLogFound := false
 	var configLog Log
 
@@ -106,7 +109,7 @@ func NewRaftNode(address shared.Address, fsm FSM, localID uint64, initialCluster
 			logger.Log.Info(cluster)
 		} else {
 			nextIndex[cluster.Address.Host()] = lastLog.Index + 1
-			matchIndex[cluster.Address.Host()] = 0
+			matchIndex[cluster.Address.Host()] = lastLog.Index
 		}
 	}
 
@@ -473,9 +476,9 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration, isHeartbeat bool) {
 		if resp.Success {
 			//logger.Log.Info(fmt.Sprintf("Success send append entries to %d", peer.ID))
 			if len(appendEntry.Entries) > 0 && !isHeartbeat {
-				nextIndex[peer.Address.Host()]++
+				nextIndex[peer.Address.Host()] += uint64(len(appendEntry.Entries))
 				r.setNextIndex(nextIndex)
-				matchIndex[peer.Address.Host()]++
+				matchIndex[peer.Address.Host()] += uint64(len(appendEntry.Entries))
 				r.setMatchIndex(matchIndex)
 			}
 			break

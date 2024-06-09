@@ -77,8 +77,9 @@ func (r *RaftNode) ReceiveAppendEntries(args *ReceiveAppendEntriesArgs, reply *R
 	}
 
 	if len(args.Entries) > 0 {
+		//logger.Log.Debug(fmt.Sprintf("received entries with length %d", len(args.Entries)))
 		for _, entry := range args.Entries {
-			if entry.Type == CONFIGURATION && r.configurations.latestIndex != entry.Index {
+			if entry.Type == CONFIGURATION {
 				r.commitLatestConfiguration()
 				decodedConfig, err := DecodeConfiguration(entry.Data)
 
@@ -90,7 +91,6 @@ func (r *RaftNode) ReceiveAppendEntries(args *ReceiveAppendEntriesArgs, reply *R
 				logger.Log.Debug(fmt.Sprintf("set latest received from %d", args.LeaderConfig.ID))
 
 				r.setLatestConfiguration(*decodedConfig, entry.Index)
-
 			}
 		}
 	}
