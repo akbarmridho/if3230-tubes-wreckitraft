@@ -17,8 +17,7 @@ type RaftNode struct {
 	// Track the latest configuration and latest commited configuration
 	configurations Configurations
 
-	Config NodeConfiguration
-
+	id                uint64
 	clusters          Configuration
 	clustersLock      sync.RWMutex
 	clusterLeader     *NodeConfiguration
@@ -92,17 +91,14 @@ func NewRaftNode(address shared.Address, fsm FSM, localID uint64) (*RaftNode, er
 		),
 	}
 
-	var self NodeConfiguration
 	nextIndex := map[shared.Address]uint64{}
 	matchIndex := map[shared.Address]uint64{}
 
-	logger.Log.Info("Current ID: ", self.ID)
+	logger.Log.Info("Current ID: ", localID)
 
 	for _, cluster := range clusters {
 		if localID == cluster.ID {
-			logger.Log.Info("masuk euy")
 			logger.Log.Info(cluster)
-			self = cluster
 		} else {
 			nextIndex[cluster.Address] = lastLog.Index + 1
 			matchIndex[cluster.Address] = 0
@@ -110,7 +106,7 @@ func NewRaftNode(address shared.Address, fsm FSM, localID uint64) (*RaftNode, er
 	}
 
 	node := RaftNode{
-		Config:   self,
+		id:       localID,
 		fsm:      fsm,
 		logs:     store,
 		stable:   store,
@@ -169,10 +165,16 @@ func (r *RaftNode) runFollower() {
 				heartbeatTimer = r.getTimeout(heartbeatTimeout)
 				continue
 			}
-			logger.Log.Warn("Heartbeat timeout")
-			// time out occurs
-			r.clusterLeader = nil
-			r.setState(CANDIDATE)
+
+			if r.GetConfig().Status == Voter {
+				logger.Log.Warn("Heartbeat timeout")
+				// time out occurs
+				r.clusterLeader = nil
+				r.setState(CANDIDATE)
+			} else {
+				logger.Log.Warn("Heartbeat timeout but node is not a voter. Waiting for new leader")
+				r.clusterLeader = nil
+			}
 
 			return
 		}
@@ -180,7 +182,7 @@ func (r *RaftNode) runFollower() {
 }
 
 func (r *RaftNode) runCandidate() {
-	logger.Log.Info(fmt.Sprintf("Running node: %d as candidate", r.Config.ID))
+	logger.Log.Info(fmt.Sprintf("Running node: %d as candidate", r.GetConfig().ID))
 	votesChannel := r.startElection()
 	r.electionTimeout = util.RandomTimeout(
 		constant.ELECTION_TIMEOUT_MIN*time.Millisecond, constant.ELECTION_TIMEOUT_MAX*time.Millisecond,
@@ -205,14 +207,15 @@ func (r *RaftNode) runCandidate() {
 				votesReceived += 1
 				logger.Log.Info(fmt.Sprintf("Received vote from: %d", v.VoterID))
 				if votesReceived >= majorityThreshold {
-					logger.Log.Info(fmt.Sprintf("%d won the election", r.Config.ID))
+					config := r.GetConfig()
+					logger.Log.Info(fmt.Sprintf("%d won the election", config.ID))
 					r.setState(LEADER)
-					r.setClusterLeader(r.Config)
+					r.setClusterLeader(config)
 					return
 				}
 			}
 		case <-electionTimer:
-			logger.Log.Warn(fmt.Sprintf("Election timeout for %d", r.Config.ID))
+			logger.Log.Warn(fmt.Sprintf("Election timeout for %d", r.GetConfig().ID))
 			return
 		}
 	}
@@ -225,13 +228,15 @@ func (r *RaftNode) startElection() <-chan *RequestVoteResponse {
 	votesChannel := make(chan *RequestVoteResponse, voterCount)
 	r.setCurrentTerm(r.getCurrentTerm() + 1)
 
+	config := r.GetConfig()
+
 	lastLogIndex, lastTerm := r.getLastLog()
 	req := RequestVoteArgs{
 		Term:         r.getCurrentTerm(),
 		LastLogIndex: lastLogIndex,
 		LastLogTerm:  lastTerm,
 	}
-	req.CandidateID = r.Config.ID
+	req.CandidateID = config.ID
 
 	requestVoteFromPeer := func(peer NodeConfiguration) {
 		r.goFunc(
@@ -250,11 +255,11 @@ func (r *RaftNode) startElection() <-chan *RequestVoteResponse {
 			continue
 		}
 
-		if peer.ID == r.Config.ID {
+		if peer.ID == config.ID {
 			votesChannel <- &RequestVoteResponse{
 				Term:    req.Term,
 				Granted: true,
-				VoterID: r.Config.ID,
+				VoterID: config.ID,
 			}
 		} else {
 			requestVoteFromPeer(peer)
@@ -278,7 +283,9 @@ func (r *RaftNode) runLeader() {
 		}
 	}
 
-	logger.Log.Info(fmt.Sprintf("%s:%d is no longer the leader", r.Config.GetHost(), r.Config.Address.Port))
+	config := r.GetConfig()
+
+	logger.Log.Info(fmt.Sprintf("%s:%d is no longer the leader", config.GetHost(), config.Address.Port))
 }
 
 func (r *RaftNode) createHeartbeatTicker() {
@@ -300,10 +307,9 @@ func (r *RaftNode) resetHeartbeatTicker() {
 func (r *RaftNode) sendHeartbeat() {
 	logger.Log.Info(fmt.Sprintf("Sending heartbeat at: %s", time.Now()))
 
-	r.clustersLock.RLock()
-
-	for _, peer := range r.clusters.Servers {
-		if peer.ID == r.Config.ID {
+	// send heartbeat to latest configuration (could be commited or uncommited)
+	for _, peer := range r.configurations.latest.Servers {
+		if peer.ID == r.GetConfig().ID {
 			continue
 		}
 
@@ -312,8 +318,6 @@ func (r *RaftNode) sendHeartbeat() {
 
 		go r.appendEntries(peer, false)
 	}
-
-	r.clustersLock.RUnlock()
 }
 
 func (r *RaftNode) getTimeout(timeout time.Duration) <-chan time.Time {
@@ -344,7 +348,7 @@ func (r *RaftNode) ReceiveRequestVote(args *RequestVoteArgs, reply *RequestVoteR
 	logger.Log.Info("Received request vote from: ", args.CandidateID)
 	reply.Term = r.getCurrentTerm()
 	reply.Granted = false
-	reply.VoterID = r.Config.ID
+	reply.VoterID = r.GetConfig().ID
 
 	if r.currentTerm > args.Term {
 		return nil
@@ -410,7 +414,7 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration, isHeartbeat bool) {
 
 	appendEntry := ReceiveAppendEntriesArgs{
 		Term:         r.getCurrentTerm(),
-		LeaderConfig: r.Config,
+		LeaderConfig: r.GetConfig(),
 		Entries:      nil,
 		LeaderCommit: r.getCommitIndex(),
 	}
@@ -461,7 +465,6 @@ func (r *RaftNode) appendEntries(peer NodeConfiguration, isHeartbeat bool) {
 			nextIndex[peer.Address]--
 		}
 	}
-
 }
 
 func (r *RaftNode) commitLog(newCommitIndex uint64) {
@@ -474,14 +477,14 @@ func (r *RaftNode) commitLog(newCommitIndex uint64) {
 		if i == 0 {
 			continue
 		}
-		logger.Log.Info(fmt.Sprintf("From node:%d applying log to fsm with index %d", r.Config.ID, i))
+		logger.Log.Info(fmt.Sprintf("From node:%d applying log to fsm with index %d", r.GetConfig().ID, i))
 
 		log := logs[i-1]
 
 		if log.Type == COMMAND {
 			r.fsm.Apply(&log)
 		} else if log.Type == CONFIGURATION {
-			//
+			// todo is there something need to be done here?
 		}
 	}
 }
@@ -522,7 +525,7 @@ type LogReply struct {
 func (r *RaftNode) IsLeader() bool {
 	r.clusterLeaderLock.RLock()
 	defer r.clusterLeaderLock.RUnlock()
-	return r.clusterLeader != nil && r.clusterLeader.ID == r.Config.ID
+	return r.clusterLeader != nil && r.clusterLeader.ID == r.GetConfig().ID
 }
 
 func (r *RaftNode) IsCandidate() bool {
@@ -538,4 +541,20 @@ func (r *RaftNode) GetLeaderAddress() string {
 		return fmt.Sprintf("%s:%d", r.clusterLeader.Address.IP, r.clusterLeader.Address.Port)
 	}
 	return ""
+}
+
+func (r *RaftNode) GetConfig() NodeConfiguration {
+	r.clustersLock.RLock()
+	defer r.clustersLock.RUnlock()
+
+	var me NodeConfiguration
+
+	for _, server := range r.clusters.Servers {
+		if server.ID == r.id {
+			me = server
+			break
+		}
+	}
+
+	return me
 }
