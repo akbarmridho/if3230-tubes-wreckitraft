@@ -35,6 +35,18 @@ func NewClient(servers []string) (*Client, error) {
 	return nil, fmt.Errorf("fail to connect to any server: %v", lastErr)
 }
 
+func (c *Client) ChangeClient(port string) error {
+	newAddress := "localhost:" + port
+	newClient, err := rpc.DialHTTP("tcp", newAddress)
+	if err != nil {
+		return err
+	}
+	c.serverAddress = newAddress
+	c.rpcClient = newClient
+	log.Printf("Successfully changed server to %s", newAddress)
+	return nil
+}
+
 func (c *Client) HealthCheck() error {
 	var reply bool
 	err := c.rpcClient.Call("Server.Ping", struct{}{}, &reply)

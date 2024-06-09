@@ -24,6 +24,9 @@ func main() {
 	servers := append([]string{args.Host}, []string{
 		"localhost:5001",
 		"localhost:5002",
+		"localhost:5003",
+		"localhost:5004",
+		"localhost:5005",
 	}...)
 
 	// Connect to the first available server
@@ -175,6 +178,19 @@ func main() {
 			}
 
 			fmt.Println(cli.DemoteVoter(id))
+
+		case "change":
+			if len(parts) != 2 {
+				fmt.Println("Usage: change <port>")
+				continue
+			}
+			port := parts[1]
+			err := cli.ChangeClient(port)
+			if err != nil {
+				fmt.Printf("Failed to connect to new server at localhost:%s: %v\n", port, err)
+				continue
+			}
+			fmt.Printf("Successfully changed server to port %s\n", port)
 
 		default:
 			fmt.Println("Unknown command")
