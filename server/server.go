@@ -214,6 +214,8 @@ func (s *Server) Execute(args *CommandArgs, reply *CommandReply) error {
 		err = s.raftNode.Apply(b)
 		if err == nil {
 			reply.Result = fmt.Sprintf("[OK] Set %s-%s successful", args.Key, args.Value)
+		} else {
+			reply.Result = err.Error()
 		}
 
 	case "get":
@@ -236,7 +238,10 @@ func (s *Server) Execute(args *CommandArgs, reply *CommandReply) error {
 		}
 		err = s.raftNode.Apply(b)
 		if err != nil {
-			return err
+			reply.Result = err.Error()
+			//return err
+		} else {
+			reply.Result = fmt.Sprintf("[OK] Delete %s successful", args.Key)
 		}
 	case "append":
 		b, err := json.Marshal(args)
