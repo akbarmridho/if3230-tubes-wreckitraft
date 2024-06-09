@@ -35,40 +35,6 @@ func NewClient(servers []string) (*Client, error) {
 	return nil, fmt.Errorf("fail to connect to any server: %v", lastErr)
 }
 
-// reconnect to another server if the current connection fails
-func (c *Client) reconnect() error {
-	var lastErr error
-	for _, server := range c.servers {
-		log.Printf("[WARN] Attempt to connect to server %s", server)
-		if server == c.serverAddress {
-			continue
-		}
-		client, err := rpc.DialHTTP("tcp", server)
-		if err == nil {
-			log.Printf("[OK] Connected to server %s", server)
-			c.serverAddress = server
-			c.rpcClient = client
-			return nil
-		}
-		lastErr = err
-	}
-	return fmt.Errorf("failed to reconnect to any server: %v", lastErr)
-}
-
-// executeWithReconnect tries to reconnect if it fails to execute
-func (c *Client) executeWithReconnect(call func() error) error {
-	err := call()
-	if err != nil {
-		log.Fatalf("Error: %v", err)
-		log.Printf("[ERR] Connection to server %s failed, attempting to reconnect...", c.serverAddress)
-		if reconnectErr := c.reconnect(); reconnectErr != nil {
-			return reconnectErr
-		}
-		err = call() // Retry the call after reconnecting
-	}
-	return nil
-}
-
 func (c *Client) HealthCheck() error {
 	var reply bool
 	err := c.rpcClient.Call("Server.Ping", struct{}{}, &reply)
@@ -106,27 +72,6 @@ func (c *Client) Execute(command, key, value string) string {
 	}
 	args := &server.CommandArgs{Command: command, Key: key, Value: value}
 	var reply server.CommandReply
-	// err := c.executeWithReconnect(func() error {
-	// 	return c.rpcClient.Call("Server.Execute", args, &reply)
-	// })
-	// if err != nil {
-	// 	log.Fatalf("Execute error: %v", err)
-	// }
-	// if reply.LeaderAddress != "" {
-	// 	log.Printf("Redirecting to leader at %s", reply.LeaderAddress)
-	// 	c.serverAddress = reply.LeaderAddress
-	// 	c.rpcClient, err = rpc.DialHTTP("tcp", c.serverAddress)
-	// 	if err != nil {
-	// 		log.Fatalf("Failed to connect to new leader: %v", err)
-	// 	}
-	// 	err = c.executeWithReconnect(func() error {
-	// 		return c.rpcClient.Call("Server.Execute", args, &reply)
-	// 	})
-	// 	if err != nil {
-	// 		log.Fatalf("Execute error after redirection: %v", err)
-	// 	}
-	// }
-	// return reply.Result
 
 	err := c.rpcClient.Call("Server.Execute", args, &reply)
 	if reply.LeaderAddress != "" {
@@ -150,18 +95,28 @@ func (c *Client) Execute(command, key, value string) string {
 func (c *Client) RequestLog() []string {
 	var args raft.LogArgs
 	var reply raft.LogReply
-	// err := c.executeWithReconnect(func() error {
-	// 	return c.rpcClient.Call("Server.RequestLog", &args, &reply)
-	// })
 	if err := c.HealthCheck(); err != nil {
 		log.Printf("Health check failed for server %s: %v", c.serverAddress, err)
 		if err := c.Reconnect(); err != nil {
 			log.Fatalf("Failed to reconnect: %v", err)
 		}
 	}
+
 	err := c.rpcClient.Call("Server.RequestLog", &args, &reply)
 	if err != nil {
 		log.Printf("RequestLog error: %v", err)
+	}
+	if reply.LeaderAddress!=""{
+		log.Printf("Redirecting to leader at %s", reply.LeaderAddress)
+		c.serverAddress = reply.LeaderAddress
+		c.rpcClient, err = rpc.DialHTTP("tcp", c.serverAddress)
+		if err != nil {
+			log.Fatalf("Failed to connect to new leader: %v", err)
+		}
+		err = c.rpcClient.Call("Server.RequestLog", args, &reply)
+		if err != nil {
+			log.Fatalf("Execute error after redirection: %v", err)
+		}
 	}
 	return reply.Log
 }

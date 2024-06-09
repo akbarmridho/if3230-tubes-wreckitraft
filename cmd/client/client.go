@@ -27,7 +27,6 @@ func main() {
 	}...)
 
 	// Connect to the first available server
-	log.Printf("got host %s", args.Host)
 	cli, err := client.NewClient(servers)
 	if err != nil {
 		log.Fatalf("Failed to connect to server: %v", err)
